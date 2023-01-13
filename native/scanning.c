@@ -1652,12 +1652,6 @@ static always_inline void memcpy_p64(char * restrict dp, const char * restrict s
     if (nb >=  1) { *dp = *sp; }
 }
 
-static always_inline bool vec_cross_page(const void * p, size_t n) {
-#define PAGE_SIZE 4096
-    return (((size_t)(p)) & (PAGE_SIZE - 1)) > (PAGE_SIZE - n);
-#undef PAGE_SIZE
-}
-
 static always_inline long skip_container_fast(const GoString *src, long *p, char lc, char rc) {
     long nb = src->len - *p;
     const char *s = src->buf + *p;

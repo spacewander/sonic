@@ -150,4 +150,10 @@ long validate_one(const GoString *src, long *p, StateMachine *m);
 
 long skip_one_fast(const GoString *src, long *p);
 long get_by_path(const GoString *src, long *p, const GoSlice *path);
+
+static always_inline bool vec_cross_page(const void * p, size_t n) {
+#define PAGE_SIZE 4096
+    return (((size_t)(p)) & (PAGE_SIZE - 1)) > (PAGE_SIZE - n);
+#undef PAGE_SIZE
+}
 #endif

@@ -16,6 +16,7 @@
 
 #include "native.h"
 #include <stdint.h>
+#include "test/xprintf.h"
 
 /** String Quoting **/
 #define MAX_ESCAPED_BYTES 8
@@ -273,8 +274,6 @@ static inline ssize_t memcchr_quote_unsafe(const char *sp, ssize_t nb, char *dp,
 
 simd_copy:
 
-    if (nb < 16) goto scalar_copy;
-
 #if USE_AVX2
     /* 32-byte loop, full store */
     while (nb >= 32) {
@@ -297,8 +296,25 @@ simd_copy:
         nb -= 32;
     }
 
-    /* clear upper half to avoid AVX-SSE transition penalty */
-    _mm256_zeroupper();
+    if (!vec_cross_page(sp, 32)) {
+        xprintf("tail: avx2\n");
+        __m256i vv = _mm256_loadu_si256  ((const void *)sp);
+        __m256i rv = _mm256_find_quote   (vv);
+                     _mm256_storeu_si256 ((void *)dp, vv);
+
+        /* check for matches */
+        mm = _mm256_movemask_epi8(rv);
+        if ((mm != 0) && (cn = __builtin_ctz(mm)) < nb) {
+            sp += cn;
+            nb -= cn;
+            dp += cn;
+            goto escape;
+        }
+        sp += nb;
+        dp += nb;
+        return dp - ds;
+    }
+    xprintf("tail: scalar\n");
 #endif
 
     /* 16-byte loop, full store */
@@ -409,11 +425,11 @@ ssize_t quote(const char *sp, ssize_t nb, char *dp, ssize_t *dn, uint64_t flags)
         tab = _DoubleQuoteTab;
     }
 
-    if (*dn >= nb * MAX_ESCAPED_BYTES) {
+    if (*dn >= (nb * MAX_ESCAPED_BYTES + 32)) {
         *dn = memcchr_quote_unsafe(sp, nb, dp, tab);
         return nb;
     }
-
+    xprintf("tail: safe\n");
     /* find the special characters, copy on the fly */
     while (nb != 0) {
         int     nc;
