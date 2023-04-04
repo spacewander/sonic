@@ -165,7 +165,7 @@ func Encode(val interface{}, opts Options) ([]byte, error) {
     var ret []byte
 
     buf := newBytes()
-    err := encodeInto(&buf, val, opts)
+    err := encodeInto(buf, val, opts)
 
     /* check for errors */
     if err != nil {
@@ -175,20 +175,19 @@ func Encode(val interface{}, opts Options) ([]byte, error) {
 
     /* htmlescape or correct UTF-8 if opts enable */
     old := buf
-    buf = encodeFinish(old, opts)
-    pbuf := ((*rt.GoSlice)(unsafe.Pointer(&buf))).Ptr
-    pold := ((*rt.GoSlice)(unsafe.Pointer(&old))).Ptr
+    out := encodeFinish(*old, opts)
+    pbuf := ((*rt.GoSlice)(unsafe.Pointer(&out))).Ptr
+    pold := ((*rt.GoSlice)(unsafe.Pointer(old))).Ptr
 
     /* return when allocated a new buffer */
     if pbuf != pold {
         freeBytes(old)
-        return buf, nil
+        return *buf, nil
     }
 
     /* make a copy of the result */
-    ret = make([]byte, len(buf))
-    copy(ret, buf)
-
+    ret = make([]byte, len(*buf))
+    copy(ret, *buf)
     freeBytes(buf)
     /* return the buffer into pool */
     return ret, nil
@@ -249,12 +248,12 @@ func HTMLEscape(dst []byte, src []byte) []byte {
 // followed by one or more copies of indent according to the indentation nesting.
 func EncodeIndented(val interface{}, prefix string, indent string, opts Options) ([]byte, error) {
     var err error
-    var out []byte
+    var out *[]byte
     var buf *bytes.Buffer
 
     /* encode into the buffer */
     out = newBytes()
-    err = EncodeInto(&out, val, opts)
+    err = EncodeInto(out, val, opts)
 
     /* check for errors */
     if err != nil {
@@ -264,7 +263,7 @@ func EncodeIndented(val interface{}, prefix string, indent string, opts Options)
 
     /* indent the JSON */
     buf = newBuffer()
-    err = json.Indent(buf, out, prefix, indent)
+    err = json.Indent(buf, *out, prefix, indent)
 
     /* check for errors */
     if err != nil {

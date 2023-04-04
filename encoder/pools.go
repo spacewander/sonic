@@ -87,11 +87,12 @@ func _Encoder_Shadow(rb *[]byte, vp unsafe.Pointer, sb *_Stack, fv uint64) (err 
     return errCallShadow
 }
 
-func newBytes() []byte {
+func newBytes() *[]byte {
     if ret := bytesPool.Get(); ret != nil {
-        return ret.([]byte)
+        return ret.(*[]byte)
     } else {
-        return make([]byte, 0, option.DefaultEncoderBufferSize)
+        b := make([]byte, 0, option.DefaultEncoderBufferSize)
+        return &b
     }
 }
 
@@ -115,8 +116,8 @@ func newBuffer() *bytes.Buffer {
     }
 }
 
-func freeBytes(p []byte) {
-    p = p[:0]
+func freeBytes(p *[]byte) {
+    *p = (*p)[:0]
     bytesPool.Put(p)
 }
 
