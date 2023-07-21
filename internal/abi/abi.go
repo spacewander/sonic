@@ -21,8 +21,14 @@ import (
     `reflect`
     `sort`
     `strings`
+    `unsafe`
 
     `github.com/bytedance/sonic/internal/rt`
+)
+
+var (
+    intType = reflect.TypeOf(0)
+    ptrType = reflect.TypeOf(unsafe.Pointer(nil))
 )
 
 type FunctionLayout struct {
@@ -145,10 +151,6 @@ func (self *Frame) Prev() uint32 {
 
 func (self *Frame) Size() uint32 {
     return uint32(self.Offs() + PtrSize)
-}
-
-func (self *Frame) Offs() uint32 {
-    return uint32(len(ReservedRegs(self.ccall)) * PtrSize + len(self.locals)*PtrSize)
 }
 
 func (self *Frame) ArgPtrs() *rt.StackMap {

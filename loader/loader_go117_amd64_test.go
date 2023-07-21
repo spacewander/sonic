@@ -41,7 +41,6 @@ func TestLoad(t *testing.T) {
     //         t.Fatal("not panic")
     //     }
     // }()
-
     var hstr string
 
     type TestFunc func(i *int, hook func(i *int)) int

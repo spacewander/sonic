@@ -27,11 +27,6 @@ import (
 )
 
 const (
-    _MinLC uint8 = 1
-    _PtrSize uint8 = 8
-)
-
-const (
     _N_FUNCDATA = 8
     _INVALID_FUNCDATA_OFFSET = ^uint32(0)
     _FUNC_SIZE = unsafe.Sizeof(_func{})

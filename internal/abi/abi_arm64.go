@@ -19,9 +19,9 @@ package abi
 import (
     `fmt`
     `reflect`
-    `unsafe`
 
-    . `github.com/chenzhuoyu/iasm/x86_64`
+    . `github.com/chenzhuoyu/iasm/arch/aarch64`
+    `github.com/chenzhuoyu/iasm/asm`
 )
 
 const (
@@ -29,141 +29,75 @@ const (
     PtrAlign = 8    // pointer alignment
 )
 
-var iregOrderC = []Register{
-    RDI, 
-    RSI, 
-    RDX, 
-    RCX,
-    R8, 
-    R9,
-}
-
-var xregOrderC = []Register{
-    XMM0,
-    XMM1,
-    XMM2,
-    XMM3,
-    XMM4,
-    XMM5,
-    XMM6,
-    XMM7,
-}
-
 func (self *Frame) Offs() uint32 {
     return PtrSize + uint32(len(ReservedRegs(self.ccall)) * PtrSize + len(self.locals)*PtrSize)
 }
 
-func (self *Frame) argv(i int) *MemoryOperand {
-    return Ptr(RSP, int32(self.Prev() + self.desc.Args[i].Mem))
+func (self *Frame) argv(i int) *asm.MemoryOperand {
+    return Ptr(SP, int32(self.Prev() + self.desc.Args[i].Mem))
 }
 
 // spillv is used for growstack spill registers
-func (self *Frame) spillv(i int) *MemoryOperand {
+func (self *Frame) spillv(i int) *asm.MemoryOperand {
     // remain one slot for caller return pc
-    return Ptr(RSP, PtrSize + int32(self.desc.Args[i].Mem))
+    return Ptr(SP, PtrSize + int32(self.desc.Args[i].Mem))
 }
 
-func (self *Frame) retv(i int) *MemoryOperand {
-    return Ptr(RSP, int32(self.Prev() + self.desc.Rets[i].Mem))
+func (self *Frame) retv(i int) *asm.MemoryOperand {
+    return Ptr(SP, int32(self.Prev() + self.desc.Rets[i].Mem))
 }
 
-func (self *Frame) resv(i int) *MemoryOperand {
-    return Ptr(RSP, int32(self.Offs() - uint32((i+1) * PtrSize)))
+func (self *Frame) resv(i int) *asm.MemoryOperand {
+    return Ptr(SP, int32(self.Offs() - uint32((i+1) * PtrSize)))
 }
 
-func (self *Frame) emitGrowStack(p *Program, entry *Label) {
+func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
     // spill all register arguments
     for i, v := range self.desc.Args {
         if v.InRegister {
-            if v.IsFloat == floatKind64 {
-                p.MOVSD(v.Reg, self.spillv(i))
-            } else if v.IsFloat == floatKind32 {
-                p.MOVSS(v.Reg, self.spillv(i))
-            }else {
-                p.MOVQ(v.Reg, self.spillv(i))
-            }
+            p.STR(v.Reg, self.spillv(i))
         }
     }
 
     // call runtime.morestack_noctxt
-    p.MOVQ(F_morestack_noctxt, R12)
-    p.CALLQ(R12)
+    p.MOV(X12, F_morestack_noctxt)
+    p.BR(X12)
+
     // load all register arguments
     for i, v := range self.desc.Args {
         if v.InRegister {
-            if v.IsFloat == floatKind64 {
-                p.MOVSD(self.spillv(i), v.Reg)
-            } else if v.IsFloat == floatKind32 {
-                p.MOVSS(self.spillv(i), v.Reg)
-            }else {
-                p.MOVQ(self.spillv(i), v.Reg)
-            }
+            p.LDR(v.Reg, self.spillv(i))
         }
     }
 
     // jump back to the function entry
-    p.JMP(entry)
+    p.BL(entry)
 }
 
 func (self *Frame) GrowStackTextSize() uint32 {
-    p := DefaultArch.CreateProgram()
-    // spill all register arguments
-    for i, v := range self.desc.Args {
-        if v.InRegister {
-            if v.IsFloat == floatKind64 {
-                p.MOVSD(v.Reg, self.spillv(i))
-            } else if v.IsFloat == floatKind32 {
-                p.MOVSS(v.Reg, self.spillv(i))
-            }else {
-                p.MOVQ(v.Reg, self.spillv(i))
-            }
-        }
-    }
-
-    // call runtime.morestack_noctxt
-    p.MOVQ(F_morestack_noctxt, R12)
-    p.CALLQ(R12)
-    // load all register arguments
-    for i, v := range self.desc.Args {
-        if v.InRegister {
-            if v.IsFloat == floatKind64 {
-                p.MOVSD(self.spillv(i), v.Reg)
-            } else if v.IsFloat == floatKind32 {
-                p.MOVSS(self.spillv(i), v.Reg)
-            } else {
-                p.MOVQ(self.spillv(i), v.Reg)
-            }
-        }
-    }
-
-    // jump back to the function entry
-    l := CreateLabel("")
-    p.Link(l)
-    p.JMP(l)
-
+    p := new(Program)
+    self.emitGrowStack(p, asm.CreateLabel("entry"))
     return uint32(len(p.Assemble(0)))
 }
 
 func (self *Frame) emitPrologue(p *Program) {
-    p.SUBQ(self.Size(), RSP)
-    p.MOVQ(RBP, Ptr(RSP, int32(self.Offs())))
-    p.LEAQ(Ptr(RSP, int32(self.Offs())), RBP)
+    p.STR(LR, Ptr(SP, -self.Size(), PostIndex)) // str    x30, [sp, #-{size}]!
+    p.STUR(FP, Ptr(SP, -8))                     // stur   x29, [sp, #-0x8]
+    p.SUB(FP, SP, 8)                            // sub    x29, sp, #0x8
 }
 
 func (self *Frame) emitEpilogue(p *Program) {
-    p.MOVQ(Ptr(RSP, int32(self.Offs())), RBP)
-    p.ADDQ(self.Size(), RSP)
-    p.RET()
+    p.LDP(FP, LR, Ptr(SP, -8)) // ldp    x29, x30, [sp, #-0x8]
+    p.ADD(SP, SP, self.Size()) // add    sp, sp, #{size}
+    p.RET()                    // ret
 }
 
 func (self *Frame) emitReserveRegs(p *Program) {
     // spill reserved registers
     for i, r := range ReservedRegs(self.ccall) {
         switch r.(type) {
-        case Register64:
-            p.MOVQ(r, self.resv(i))
-        case XMMRegister:
-            p.MOVSD(r, self.resv(i))
+        case XRegister, WRegister:
+            p.STR(r, self.resv(i))
         default:
             panic(fmt.Sprintf("unsupported register type %t to reserve", r))
         }
@@ -174,7 +108,7 @@ func (self *Frame) emitSpillPtrs(p *Program) {
     // spill pointer argument registers
     for i, r := range self.desc.Args {
         if r.InRegister && r.IsPointer {
-            p.MOVQ(r.Reg, self.argv(i))
+            p.STR(r.Reg, self.argv(i))
         }
     }
 }
@@ -183,14 +117,18 @@ func (self *Frame) emitClearPtrs(p *Program) {
     // spill pointer argument registers
     for i, r := range self.desc.Args {
         if r.InRegister && r.IsPointer {
-            p.MOVQ(int64(0), self.argv(i))
+            p.STR(XZR, self.argv(i))
         }
     }
 }
 
-func (self *Frame) emitCallC(p *Program, addr uintptr) {
-    p.MOVQ(addr, RAX)
-    p.CALLQ(RAX)
+// addr must be the pointer to store PC
+func (self *Frame) emitCallC(p *Program, pc uintptr) {
+    p.MOVZ(X12, uint16(pc|0xffff), LSL(0))
+    p.MOVK(X12, uint16((pc>>16)|0xffff), LSL(16))
+    p.MOVK(X12, uint16((pc>>32)|0xffff), LSL(32))
+    p.MOVK(X12, uint16((pc>>48)|0xffff), LSL(48))
+    p.BR(X12)
 }
 
 type floatKind uint8
@@ -205,12 +143,12 @@ type Parameter struct {
     InRegister bool
     IsPointer  bool
     IsFloat    floatKind
-    Reg        Register
+    Reg        interface{}
     Mem        uint32
     Type       reflect.Type
 }
 
-func mkIReg(vt reflect.Type, reg Register64) (p Parameter) {
+func mkIReg(vt reflect.Type, reg XRegister) (p Parameter) {
     p.Reg = reg
     p.Type = vt
     p.InRegister = true
@@ -229,11 +167,17 @@ func isFloat(vt reflect.Type) floatKind {
     }
 }
 
-func mkXReg(vt reflect.Type, reg XMMRegister) (p Parameter) {
-    p.Reg = reg
+func mkXReg(vt reflect.Type, i int) (p Parameter) {
     p.Type = vt
     p.InRegister = true
     p.IsFloat = isFloat(vt)
+    if p.IsFloat == floatKind32 {
+        p.Reg = xregOrderGo[i]
+    } else if p.IsFloat == floatKind64 {
+        p.Reg = yregOrderGo[i]
+    } else {
+        panic("not a float type!")
+    }
     return
 }
 
@@ -254,19 +198,17 @@ func (self Parameter) String() string {
     }
 }
 
-func CallC(addr uintptr, fr Frame, maxStack uintptr) []byte {
-    p := DefaultArch.CreateProgram()
-
-    stack := CreateLabel("_stack_grow")
-    entry := CreateLabel("_entry")
+func CallC(pc uintptr, fr Frame, maxStack uintptr) []byte {
+    p := new(Program)
+    stack := asm.CreateLabel("_stack_grow")
+    entry := asm.CreateLabel("_entry")
     p.Link(entry)
     fr.emitStackCheck(p, stack, maxStack)
     fr.emitPrologue(p)
     fr.emitReserveRegs(p)
     fr.emitSpillPtrs(p)
     fr.emitExchangeArgs(p)
-    fr.emitCallC(p, addr)
-    fr.emitExchangeRets(p)
+    fr.emitCallC(p, pc)
     fr.emitRestoreRegs(p)
     fr.emitEpilogue(p)
     p.Link(stack)
@@ -277,5 +219,5 @@ func CallC(addr uintptr, fr Frame, maxStack uintptr) []byte {
 
 
 func (self *Frame) emitDebug(p *Program) {
-    p.INT(3)
+    p.BRK(0)
 }
