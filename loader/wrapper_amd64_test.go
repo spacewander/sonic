@@ -48,6 +48,9 @@ func TestMain(m *testing.M) {
 
 func TestWrapC(t *testing.T) {
 	var stub func(a int64, val *int64) (ret int64) 
+	/** int64 func (int64 a, int64 *b) {
+		return a + *b
+	}**/
 	ct := []byte{
 		0x55,                    // pushq   %rbp
 		0x48, 0x89, 0xe5,        // movq    %rsp, %rbp

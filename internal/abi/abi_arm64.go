@@ -75,7 +75,7 @@ func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
 }
 
 func (self *Frame) GrowStackTextSize() uint32 {
-    p := new(Program)
+    p := Builder(asm.GetArch("aarch64").CreateProgram())
     self.emitGrowStack(p, asm.CreateLabel("entry"))
     return uint32(len(p.Assemble(0)))
 }
@@ -199,7 +199,7 @@ func (self Parameter) String() string {
 }
 
 func CallC(pc uintptr, fr Frame, maxStack uintptr) []byte {
-    p := new(Program)
+    p := Builder(asm.GetArch("aarch64").CreateProgram())
     stack := asm.CreateLabel("_stack_grow")
     entry := asm.CreateLabel("_entry")
     p.Link(entry)
