@@ -17,11 +17,11 @@
 package abi
 
 import (
-    `fmt`
-    `reflect`
-    `unsafe`
+	"fmt"
+	"reflect"
 
-    . `github.com/chenzhuoyu/iasm/x86_64`
+	. "github.com/chenzhuoyu/iasm/arch/x86_64"
+	"github.com/chenzhuoyu/iasm/asm"
 )
 
 const (
@@ -29,7 +29,7 @@ const (
     PtrAlign = 8    // pointer alignment
 )
 
-var iregOrderC = []Register{
+var iregOrderC = []asm.Register{
     RDI, 
     RSI, 
     RDX, 
@@ -38,7 +38,7 @@ var iregOrderC = []Register{
     R9,
 }
 
-var xregOrderC = []Register{
+var xregOrderC = []asm.Register{
     XMM0,
     XMM1,
     XMM2,
@@ -53,25 +53,25 @@ func (self *Frame) Offs() uint32 {
     return PtrSize + uint32(len(ReservedRegs(self.ccall)) * PtrSize + len(self.locals)*PtrSize)
 }
 
-func (self *Frame) argv(i int) *MemoryOperand {
+func (self *Frame) argv(i int) *asm.MemoryOperand {
     return Ptr(RSP, int32(self.Prev() + self.desc.Args[i].Mem))
 }
 
 // spillv is used for growstack spill registers
-func (self *Frame) spillv(i int) *MemoryOperand {
+func (self *Frame) spillv(i int) *asm.MemoryOperand {
     // remain one slot for caller return pc
     return Ptr(RSP, PtrSize + int32(self.desc.Args[i].Mem))
 }
 
-func (self *Frame) retv(i int) *MemoryOperand {
+func (self *Frame) retv(i int) *asm.MemoryOperand {
     return Ptr(RSP, int32(self.Prev() + self.desc.Rets[i].Mem))
 }
 
-func (self *Frame) resv(i int) *MemoryOperand {
+func (self *Frame) resv(i int) *asm.MemoryOperand {
     return Ptr(RSP, int32(self.Offs() - uint32((i+1) * PtrSize)))
 }
 
-func (self *Frame) emitGrowStack(p *Program, entry *Label) {
+func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
     // spill all register arguments
     for i, v := range self.desc.Args {
         if v.InRegister {
@@ -106,7 +106,7 @@ func (self *Frame) emitGrowStack(p *Program, entry *Label) {
 }
 
 func (self *Frame) GrowStackTextSize() uint32 {
-    p := DefaultArch.CreateProgram()
+    p := Builder(asm.GetArch("x86_64").CreateProgram())
     // spill all register arguments
     for i, v := range self.desc.Args {
         if v.InRegister {
@@ -137,7 +137,7 @@ func (self *Frame) GrowStackTextSize() uint32 {
     }
 
     // jump back to the function entry
-    l := CreateLabel("")
+    l := asm.CreateLabel("")
     p.Link(l)
     p.JMP(l)
 
@@ -205,7 +205,7 @@ type Parameter struct {
     InRegister bool
     IsPointer  bool
     IsFloat    floatKind
-    Reg        Register
+    Reg        asm.Register
     Mem        uint32
     Type       reflect.Type
 }
@@ -255,10 +255,10 @@ func (self Parameter) String() string {
 }
 
 func CallC(addr uintptr, fr Frame, maxStack uintptr) []byte {
-    p := DefaultArch.CreateProgram()
+    p := Builder(asm.GetArch("x86_64").CreateProgram())
 
-    stack := CreateLabel("_stack_grow")
-    entry := CreateLabel("_entry")
+    stack := asm.CreateLabel("_stack_grow")
+    entry := asm.CreateLabel("_entry")
     p.Link(entry)
     fr.emitStackCheck(p, stack, maxStack)
     fr.emitPrologue(p)

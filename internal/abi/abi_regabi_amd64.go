@@ -26,10 +26,11 @@
 package abi
 
 import (
-    `fmt`
-    `reflect`
+	"fmt"
+	"reflect"
 
-    . `github.com/chenzhuoyu/iasm/x86_64`
+	. "github.com/chenzhuoyu/iasm/arch/x86_64"
+	"github.com/chenzhuoyu/iasm/asm"
 )
 
 /** Frame Structure of the Generated Function
@@ -61,7 +62,7 @@ offs()  -------------------------------|
 
 const zeroRegGo = XMM15
 
-var iregOrderGo = [...]Register64 {
+var iregOrderGo = [...]asm.Register {
     RAX,// RDI
     RBX,// RSI
     RCX,// RDX
@@ -91,11 +92,11 @@ var xregOrderGo = [...]XMMRegister {
     XMM14,
 }
 
-func ReservedRegs(callc bool) []Register {
+func ReservedRegs(callc bool) []asm.Register {
     if callc {
         return nil
     }
-    return []Register {
+    return []asm.Register {
         R14, // current goroutine
         R15, // GOT reference
     }
@@ -112,7 +113,7 @@ func (self *stackAlloc) reset() {
 }
 
 func (self *stackAlloc) ireg(vt reflect.Type) (p Parameter) {
-    p = mkIReg(vt, iregOrderGo[self.i])
+    p = mkIReg(vt, iregOrderGo[self.i].(Register64))
     self.i++
     return
 }
@@ -267,17 +268,17 @@ func (self *Frame) emitExchangeArgs(p *Program) {
     }
 }
 
-func (self *Frame) emitStackCheck(p *Program, to *Label, maxStack uintptr) {
+func (self *Frame) emitStackCheck(p *Program, to *asm.Label, maxStack uintptr) {
     p.LEAQ(Ptr(RSP, int32(-(self.Size() + uint32(maxStack)))), R12)
     p.CMPQ(Ptr(R14, _G_stackguard0), R12)
     p.JBE(to)
 }
 
 func (self *Frame) StackCheckTextSize() uint32 {
-    p  := DefaultArch.CreateProgram()
+    p := Builder(asm.GetArch("x86_64").CreateProgram())
     p.LEAQ(Ptr(RSP, int32(-(self.Size()))), R12)
     p.CMPQ(Ptr(R14, _G_stackguard0), R12)
-    to := CreateLabel("")
+    to := asm.CreateLabel("")
     p.Link(to)
     p.JBE(to)
     return uint32(len(p.Assemble(0)))
