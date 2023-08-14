@@ -60,8 +60,8 @@ func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
     }
 
     // call runtime.morestack_noctxt
-    p.MOV(X12, F_morestack_noctxt)
-    p.BR(X12)
+    loadBigImm(p, uint64(F_morestack_noctxt), X12)
+    p.BLR(X12)
 
     // load all register arguments
     for i, v := range self.desc.Args {
@@ -76,18 +76,27 @@ func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
 
 func (self *Frame) GrowStackTextSize() uint32 {
     p := Builder(asm.GetArch("aarch64").CreateProgram())
-    self.emitGrowStack(p, asm.CreateLabel("entry"))
+    l := asm.CreateLabel("entry")
+    self.emitGrowStack(p, l)
+    p.Link(l)
     return uint32(len(p.Assemble(0)))
 }
 
+func getComplement(n int) int {
+    if n >= 0 {
+        panic("n must be negative")
+    }
+    return (^n) + 1
+}
+
 func (self *Frame) emitPrologue(p *Program) {
-    p.STR(LR, Ptr(SP, -self.Size(), PostIndex)) // str    x30, [sp, #-{size}]!
-    p.STUR(FP, Ptr(SP, -8))                     // stur   x29, [sp, #-0x8]
+    p.STR(LR, Ptr(SP, getComplement(-int(self.Size())), PostIndex)) // str    x30, [sp, #-{size}]!
+    p.STUR(FP, Ptr(SP, getComplement(-8)))                     // stur   x29, [sp, #-0x8]
     p.SUB(FP, SP, 8)                            // sub    x29, sp, #0x8
 }
 
 func (self *Frame) emitEpilogue(p *Program) {
-    p.LDP(FP, LR, Ptr(SP, -8)) // ldp    x29, x30, [sp, #-0x8]
+    p.LDP(FP, LR, Ptr(SP, getComplement(-8))) // ldp    x29, x30, [sp, #-0x8]
     p.ADD(SP, SP, self.Size()) // add    sp, sp, #{size}
     p.RET()                    // ret
 }
@@ -124,11 +133,15 @@ func (self *Frame) emitClearPtrs(p *Program) {
 
 // addr must be the pointer to store PC
 func (self *Frame) emitCallC(p *Program, pc uintptr) {
-    p.MOVZ(X12, uint16(pc|0xffff), LSL(0))
-    p.MOVK(X12, uint16((pc>>16)|0xffff), LSL(16))
-    p.MOVK(X12, uint16((pc>>32)|0xffff), LSL(32))
-    p.MOVK(X12, uint16((pc>>48)|0xffff), LSL(48))
-    p.BR(X12)
+    loadBigImm(p, uint64(pc), X12)
+    p.BLR(X12)
+}
+
+func loadBigImm(p *Program, imm uint64, reg interface{}) {
+    p.MOVZ(reg, uint16(imm|0xffff), LSL(0))
+    p.MOVK(reg, uint16((imm>>16)|0xffff), LSL(16))
+    p.MOVK(reg, uint16((imm>>32)|0xffff), LSL(32))
+    p.MOVK(reg, uint16((imm>>48)|0xffff), LSL(48))
 }
 
 type floatKind uint8

@@ -217,13 +217,16 @@ func (self *Frame) emitExchangeArgs(p *Program) {
 
 func (self *Frame) emitStackCheck(p *Program, to *asm.Label, maxStack uintptr) {
     p.LDR(X16, Ptr(X28, _G_stackguard0))
-    p.LDR(X17, Ptr(SP, -int16(maxStack)))
-    p.BLS(to)
+    p.SUB(X17, SP, maxStack)
+    p.CMP(X17, X16)
+    p.BLE(to)
 }
 
 func (self *Frame) StackCheckTextSize() uint32 {
     p := Builder(asm.GetArch("aarch64").CreateProgram())
-    self.emitStackCheck(p, asm.CreateLabel("_"), 1024)
+    l := asm.CreateLabel("_")
+    self.emitStackCheck(p, l, 1024)
+    p.Link(l)
     return uint32(len(p.Assemble(0)))
 }
 
