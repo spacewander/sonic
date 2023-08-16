@@ -82,21 +82,15 @@ func (self *Frame) GrowStackTextSize() uint32 {
     return uint32(len(p.Assemble(0)))
 }
 
-func getComplement(n int) int {
-    if n >= 0 {
-        panic("n must be negative")
-    }
-    return (^n) + 1
-}
 
 func (self *Frame) emitPrologue(p *Program) {
-    p.STR(LR, Ptr(SP, getComplement(-int(self.Size())), PostIndex)) // str    x30, [sp, #-{size}]!
-    p.STUR(FP, Ptr(SP, getComplement(-8)))                     // stur   x29, [sp, #-0x8]
+    p.STR(LR, Ptr(SP, -int(self.Size()), PostIndex)) // str    x30, [sp, #-{size}]!
+    p.STUR(FP, Ptr(SP, -8))                     // stur   x29, [sp, #-0x8]
     p.SUB(FP, SP, 8)                            // sub    x29, sp, #0x8
 }
 
 func (self *Frame) emitEpilogue(p *Program) {
-    p.LDP(FP, LR, Ptr(SP, getComplement(-8))) // ldp    x29, x30, [sp, #-0x8]
+    p.LDP(FP, LR, Ptr(SP, -8)) // ldp    x29, x30, [sp, #-0x8]
     p.ADD(SP, SP, self.Size()) // add    sp, sp, #{size}
     p.RET()                    // ret
 }
