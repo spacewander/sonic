@@ -1036,7 +1036,7 @@ func (self *_Assembler) _asm_OP_recurse(p *_Instr) {
     } else {
         self.valloc(ptrType, _CX)
         self.Emit("MOVQ", _CX, _VAR_vp)
-        self.WritePtr(3, _SP_p, jit.Ptr(_CX, 0)) 
+        self.WriteRecNotAX(3, _SP_p, jit.Ptr(_CX, 0)) 
     }
 
     self.prep_buffer_AX()                       // MOVE {buf}, (SP)
