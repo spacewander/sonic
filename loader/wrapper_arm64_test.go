@@ -19,9 +19,9 @@ package loader
 import (
 	`os`
 	`runtime`
-	`runtime/debug`
+	// `runtime/debug`
 	`testing`
-	`time`
+	// `time`
 
 	`github.com/stretchr/testify/require`
 )
@@ -31,18 +31,18 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	go func ()  {
-		if !debugAsyncGC {
-			return
-		}
-		println("Begin GC looping...")
-		for {
-		runtime.GC()
-		debug.FreeOSMemory() 
-		}
-		println("stop GC looping!")
-	}()
-	time.Sleep(time.Millisecond*100)
+	// go func ()  {
+	// 	if !debugAsyncGC {
+	// 		return
+	// 	}
+	// 	println("Begin GC looping...")
+	// 	for {
+	// 	runtime.GC()
+	// 	debug.FreeOSMemory() 
+	// 	}
+	// 	println("stop GC looping!")
+	// }()
+	// time.Sleep(time.Millisecond*100)
 	m.Run()
 }
 
@@ -79,14 +79,6 @@ func TestWrapC(t *testing.T) {
 		CName:     "add",
 		GoFunc:   &stub,
 	} }, "dummy/native", "dummy/native.c")
-	
-	// defer func(){
-	//     if err := recover(); err!= nil {
-	//         println("panic:", err)
-	//     } else {
-	//         t.Fatal("not panic")
-	//     }
-	// }()
 
 	f := stub
 	b := int64(2)    
@@ -95,13 +87,13 @@ func TestWrapC(t *testing.T) {
 	runtime.SetFinalizer(c, func(x *int64){
 		println("c got GC: ", x)
 	})
-	runtime.GC()
+	// runtime.GC()
 	println("before")
 	var act int64
 	testFunc(func() {
 		act = f(1, c)
 	})
 	println("after")
-	runtime.GC()
+	// runtime.GC()
 	require.Equal(t, int64(3), act)
 }

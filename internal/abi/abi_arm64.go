@@ -17,11 +17,11 @@
 package abi
 
 import (
-    `fmt`
-    `reflect`
+	"fmt"
+	"reflect"
 
-    . `github.com/chenzhuoyu/iasm/arch/aarch64`
-    `github.com/chenzhuoyu/iasm/asm`
+	. "github.com/chenzhuoyu/iasm/arch/aarch64"
+	"github.com/chenzhuoyu/iasm/asm"
 )
 
 const (
@@ -60,7 +60,7 @@ func (self *Frame) emitGrowStack(p *Program, entry *asm.Label) {
     }
 
     // call runtime.morestack_noctxt
-    loadBigImm(p, uint64(F_morestack_noctxt), X12)
+    p.LDI(X12, uint64(F_morestack_noctxt))
     p.BLR(X12)
 
     // load all register arguments
@@ -127,15 +127,8 @@ func (self *Frame) emitClearPtrs(p *Program) {
 
 // addr must be the pointer to store PC
 func (self *Frame) emitCallC(p *Program, pc uintptr) {
-    loadBigImm(p, uint64(pc), X12)
+    p.LDI(X12, uint64(pc))
     p.BLR(X12)
-}
-
-func loadBigImm(p *Program, imm uint64, reg interface{}) {
-    p.MOVZ(reg, uint16(imm|0xffff), LSL(0))
-    p.MOVK(reg, uint16((imm>>16)|0xffff), LSL(16))
-    p.MOVK(reg, uint16((imm>>32)|0xffff), LSL(32))
-    p.MOVK(reg, uint16((imm>>48)|0xffff), LSL(48))
 }
 
 type floatKind uint8
