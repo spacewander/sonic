@@ -5,10 +5,8 @@ github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311/go.mod h1:b583j
 github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d h1:77cEq6EriyTZ0g/qfRdp61a3Uu/AWrgIq2s0ClJV1g0=
 github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d/go.mod h1:8EPpVsBuRksnlj1mLy4AWzRNQYxauNi62uWcE3to6eA=
 github.com/chenzhuoyu/iasm v0.9.0/go.mod h1:Xjy2NpN3h7aUqeqM+woSuuvxmIe6+DDsiNLIrkAmYog=
-github.com/chenzhuoyu/iasm v0.9.1-0.20230525102838-4ca1ecdaeb09 h1:ZjIcPNZEJrIDB4jjfO5jhksptwGsxYdf2ociG2mzgEg=
-github.com/chenzhuoyu/iasm v0.9.1-0.20230525102838-4ca1ecdaeb09/go.mod h1:Xjy2NpN3h7aUqeqM+woSuuvxmIe6+DDsiNLIrkAmYog=
-github.com/chenzhuoyu/iasm v0.9.1-0.20230831103856-20034426576c h1:mHmPLT+UL3aqUyIu9sqS+jk1mcJFnc42k9vcJX2Xv6E=
-github.com/chenzhuoyu/iasm v0.9.1-0.20230831103856-20034426576c/go.mod h1:Xjy2NpN3h7aUqeqM+woSuuvxmIe6+DDsiNLIrkAmYog=
+github.com/chenzhuoyu/iasm v0.9.1-0.20230906084639-24309525c5d3 h1:dsHUC8dnFwPOYcY/JuMJ8EQFLaUobXy3QnkG8foaCjI=
+github.com/chenzhuoyu/iasm v0.9.1-0.20230906084639-24309525c5d3/go.mod h1:Xjy2NpN3h7aUqeqM+woSuuvxmIe6+DDsiNLIrkAmYog=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

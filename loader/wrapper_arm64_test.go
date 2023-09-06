@@ -19,9 +19,9 @@ package loader
 import (
 	`os`
 	`runtime`
-	// `runtime/debug`
+	`runtime/debug`
 	`testing`
-	// `time`
+	`time`
 
 	`github.com/stretchr/testify/require`
 )
@@ -31,18 +31,18 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	// go func ()  {
-	// 	if !debugAsyncGC {
-	// 		return
-	// 	}
-	// 	println("Begin GC looping...")
-	// 	for {
-	// 	runtime.GC()
-	// 	debug.FreeOSMemory() 
-	// 	}
-	// 	println("stop GC looping!")
-	// }()
-	// time.Sleep(time.Millisecond*100)
+	go func ()  {
+		if !debugAsyncGC {
+			return
+		}
+		println("Begin GC looping...")
+		for {
+		runtime.GC()
+		debug.FreeOSMemory() 
+		}
+		println("stop GC looping!")
+	}()
+	time.Sleep(time.Millisecond*100)
 	m.Run()
 }
 
@@ -54,14 +54,10 @@ func TestWrapC(t *testing.T) {
 	}
 	**/
 	ct := []byte{
-		0xff, 0x43, 0x00, 0xd1, // sub sp, sp, #16
-		0xe0, 0x07, 0x00, 0xf9, // str x0, [sp, 8]
-    	0xe1, 0x03, 0x00, 0xf9, // str x1, [sp]
-		0xe0, 0x03, 0x40, 0xf9, // ldr x0, [sp]
-    	0x01, 0x00, 0x40, 0xf9, // ldr x1, [x0]
-		0xe0, 0x07, 0x40, 0xf9, // ldr x0, [sp, 8]
+		0xfd, 0x7b, 0xbf, 0xa9, // stp	x29, x30, [sp, #-16]!
+    	0x21, 0x00, 0x40, 0xf9, // ldr x1, [x1]
     	0x20, 0x00, 0x00, 0x8b, // add x0, x1, x0
-		0xff, 0x43, 0x00, 0x91, // add sp, sp, 16
+		0xfd, 0x7b, 0xc1, 0xa8, // ldp	x29, x30, [sp], #16
     	0xc0, 0x03, 0x5f, 0xd6, // ret
 	}
 	size := uint32(len(ct))
@@ -69,10 +65,10 @@ func TestWrapC(t *testing.T) {
 		Name:     "add",
 		EntryOff: 0,
 		TextSize: size,
-		MaxStack: uintptr(16),
+		MaxStack: uintptr(40),
 		Pcsp:     [][2]uint32{
-			{4, 0},
-			{28, 16},
+			{1, 0},
+			{size-4, 24},
 			{size, 0},
 		},
 	}}, []GoC{{

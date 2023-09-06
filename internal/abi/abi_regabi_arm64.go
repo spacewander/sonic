@@ -217,7 +217,7 @@ func (self *Frame) emitExchangeArgs(p *Program) {
 
 func (self *Frame) emitStackCheck(p *Program, to *asm.Label, maxStack uintptr) {
     p.LDR(X16, Ptr(X28, _G_stackguard0))
-    p.SUB(X17, SP, maxStack)
+    p.SUB(X17, SP, uint32(maxStack)+self.Size())
     p.CMP(X17, X16)
     p.BLE(to)
 }

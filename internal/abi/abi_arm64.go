@@ -84,12 +84,14 @@ func (self *Frame) GrowStackTextSize() uint32 {
 
 
 func (self *Frame) emitPrologue(p *Program) {
-    p.STR(LR, Ptr(SP, -int(self.Size()), PostIndex)) // str    x30, [sp, #-{size}]!
+    self.emitDebug(p, 1)
+    p.STR(LR, Ptr(SP, -int(self.Size()), PreIndex)) // str    x30, [sp, #-{size}]!
     p.STUR(FP, Ptr(SP, -8))                     // stur   x29, [sp, #-0x8]
     p.SUB(FP, SP, 8)                            // sub    x29, sp, #0x8
 }
 
 func (self *Frame) emitEpilogue(p *Program) {
+    self.emitDebug(p, 2)
     p.LDP(FP, LR, Ptr(SP, -8)) // ldp    x29, x30, [sp, #-0x8]
     p.ADD(SP, SP, self.Size()) // add    sp, sp, #{size}
     p.RET()                    // ret
@@ -127,6 +129,7 @@ func (self *Frame) emitClearPtrs(p *Program) {
 
 // addr must be the pointer to store PC
 func (self *Frame) emitCallC(p *Program, pc uintptr) {
+    //TODO: since go ABI save FP on [SP, #8], we need lower SP in case of C func rewite it
     p.LDI(X12, uint64(pc))
     p.BLR(X12)
 }
@@ -218,6 +221,6 @@ func CallC(pc uintptr, fr Frame, maxStack uintptr) []byte {
 }
 
 
-func (self *Frame) emitDebug(p *Program) {
-    p.BRK(0)
+func (self *Frame) emitDebug(p *Program, i int) {
+    // p.BRK(i)
 }
