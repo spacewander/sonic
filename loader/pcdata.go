@@ -75,7 +75,12 @@ func (self Pcdata) MarshalBinary() (data []byte, err error) {
         if v.PC < sp {
             panic("PC must be in ascending order!")
         }
+        // WARN: dp should be the mutiple of {{arch}}_PCQuantum
         dp := uint64(v.PC - sp)
+        if dp % _PCQuantum != 0 {
+            panic("delta PC should be the mutiple of arch-specific PC Quantum")
+        }
+        dp /= _PCQuantum
         dv := int64(v.Val - sv)
         if dv == 0 || dp == 0 {
             continue

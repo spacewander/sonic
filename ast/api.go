@@ -1,4 +1,5 @@
-// +build amd64,go1.16,!go1.21
+//go:build go1.16 && !go1.21
+// +build go1.16,!go1.21
 
 /*
  * Copyright 2022 ByteDance Inc.
@@ -19,15 +20,16 @@
 package ast
 
 import (
-    `runtime`
-    `unsafe`
+	"encoding/base64"
+	"runtime"
+	"unsafe"
 
-    `github.com/bytedance/sonic/encoder`
-    `github.com/bytedance/sonic/internal/native`
-    `github.com/bytedance/sonic/internal/native/types`
-    `github.com/bytedance/sonic/internal/rt`
-    uq `github.com/bytedance/sonic/unquote`
-    `github.com/chenzhuoyu/base64x`
+	"github.com/bytedance/sonic/encoder"
+	"github.com/bytedance/sonic/internal/native"
+	"github.com/bytedance/sonic/internal/native/types"
+	"github.com/bytedance/sonic/internal/rt"
+	uq "github.com/bytedance/sonic/unquote"
+	// `github.com/chenzhuoyu/base64x`
 )
 
 var typeByte = rt.UnpackEface(byte(0)).Type
@@ -78,11 +80,11 @@ func unquote(src string) (string, types.ParsingError) {
 }
 
 func decodeBase64(src string) ([]byte, error) {
-    return base64x.StdEncoding.DecodeString(src)
+    return base64.StdEncoding.DecodeString(src)
 }
 
 func encodeBase64(src []byte) string {
-    return base64x.StdEncoding.EncodeToString(src)
+    return base64.StdEncoding.EncodeToString(src)
 }
 
 func (self *Parser) decodeValue() (val types.JsonState) {

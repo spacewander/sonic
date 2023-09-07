@@ -19,4 +19,5 @@ package loader
 const (
     _MinLC uint8 = 4
     _PtrSize uint8 = 8
+    _PCQuantum = 4
 )
