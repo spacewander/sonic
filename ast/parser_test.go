@@ -20,7 +20,7 @@ import (
     `encoding/json`
     `os`
     `runtime`
-    `runtime/debug`
+    // `runtime/debug`
     `sync`
     `testing`
     `time`
@@ -35,17 +35,17 @@ var (
 )
 
 func TestMain(m *testing.M) {
-    go func ()  {
-        if !debugAsyncGC {
-            return
-        }
-        println("Begin GC looping...")
-        for {
-            runtime.GC()
-            debug.FreeOSMemory()
-        }
-        println("stop GC looping!")
-    }()
+    // go func ()  {
+    //     if !debugAsyncGC {
+    //         return
+    //     }
+    //     println("Begin GC looping...")
+    //     for {
+    //         runtime.GC()
+    //         debug.FreeOSMemory()
+    //     }
+    //     println("stop GC looping!")
+    // }()
     time.Sleep(time.Millisecond)
     m.Run()
 }

@@ -323,6 +323,7 @@ func makePctab(funcs []Func, cuOffset uint32, nameOffset []int32) (pctab []byte,
         if f.Pcsp != nil {
             _f.pcsp = uint32(len(pctab))
         }
+        println("write pc data for ", f.Name)
         writer(f.Pcsp)
         if f.Pcfile != nil {
             _f.pcfile = uint32(len(pctab))

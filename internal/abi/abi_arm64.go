@@ -216,7 +216,6 @@ func CallC(pc uintptr, fr Frame, maxStack uintptr) []byte {
     fr.emitEpilogue(p)
     p.Link(stack)
     fr.emitGrowStack(p, entry)
-
     return p.Assemble(0)
 }
 

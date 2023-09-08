@@ -21,8 +21,8 @@ package loader
 
 import (
 	"runtime"
-	// "runtime/debug"
-	// "strconv"
+	"runtime/debug"
+	"strconv"
 	"testing"
 	"unsafe"
 
@@ -45,12 +45,12 @@ func TestLoad(t *testing.T) {
 
     type TestFunc func(i *int, hook func(i *int)) int
     var hook = func(i *int) {
-        panic("hook1")
-        // runtime.GC()
-        // debug.FreeOSMemory()
-        // hstr = ("hook" + strconv.Itoa(*i))
-        // runtime.GC()
-        // debug.FreeOSMemory()
+        runtime.GC()
+        debug.FreeOSMemory()
+        hstr = ("hook" + strconv.Itoa(*i))
+        runtime.GC()
+        debug.FreeOSMemory()
+        panic(hstr)
     }
     // var f TestFunc = func(i *int, hook func(i *int)) int {
     //     var t = *i
@@ -93,11 +93,11 @@ func TestLoad(t *testing.T) {
     }
 
     fn.Pcsp = &Pcdata{
-        {PC: size, Val: 32},
+        {PC: size-4, Val: 32},
+        {PC: size, Val: 0},
     }
 
     fn.Pcline = &Pcdata{
-        {PC: 0x01, Val: 0},
         {PC: 0x20, Val: 1},
         {PC: 0x40, Val: 2},
         {PC: size, Val: 3},
