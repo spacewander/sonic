@@ -1,3 +1,4 @@
+//go:build !amd64 || !go1.16 || go1.22
 // +build !amd64 !go1.16 go1.22
 
 /*
@@ -19,12 +20,13 @@
 package sonic
 
 import (
-    `bytes`
-    `encoding/json`
-    `io`
-    `reflect`
+	"bytes"
+	"encoding/json"
+	"io"
+	"reflect"
 
-    `github.com/bytedance/sonic/option`
+	"github.com/bytedance/sonic/internal/rt"
+	"github.com/bytedance/sonic/option"
 )
 
 type frozenConfig struct {
@@ -84,6 +86,9 @@ func (cfg frozenConfig) UnmarshalFromString(buf string, val interface{}) error {
     }
     if cfg.DisallowUnknownFields {
         dec.DisallowUnknownFields()
+    }
+    if !json.Valid(rt.Str2Mem(buf)) {
+        return json.Unmarshal(rt.Str2Mem(buf), val)
     }
     return dec.Decode(val)
 }
