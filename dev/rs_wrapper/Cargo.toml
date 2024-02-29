@@ -19,7 +19,8 @@ codegen-units = 1
 panic = 'abort'
 incremental = false
 overflow-checks = false
+code-model = 'large'
 
 # use dynamic libaray here, to pervent possible relocation errors when gcc linking.
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["staticlib"]

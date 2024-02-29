@@ -16,7 +16,7 @@ linux_x86:
 
 linux_aarch64:
 	mkdir -p ./rs_wrapper/lib/linux
-	cd rs_wrapper && cargo update --package sonic-rs && RUSTFLAGS="-C target-feature=+neon" cargo build --target=aarch64-unknown-linux-gnu  --release && cp -a target/aarch64-unknown-linux-gnu/release/librs_wrapper.so   ./lib/linux/libsonic_rs_aarch64-unknown-linux-gnu.so
+	cd rs_wrapper && cargo update --package sonic-rs && RUSTFLAGS="-C target-feature=+neon" cargo build --target=aarch64-unknown-linux-gnu  --release && cp -a target/aarch64-unknown-linux-gnu/release/librs_wrapper.a  ./lib/linux/libsonic_rs_aarch64-unknown-linux-gnu.a
 
 darwin_x86:
 	mkdir -p ./rs_wrapper/lib/darwin
