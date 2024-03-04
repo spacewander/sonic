@@ -18,6 +18,15 @@ import (
 	_ "github.com/davecgh/go-spew/spew"
 )
 
+
+var parse_func func(data string, opt uint64) (Dom, error)
+var delete_func func(*Dom)
+
+func init() {
+	parse_func = Parse
+	delete_func = Delete
+}
+
 type Context struct {
 	Options   uint64
 	Json  string
@@ -26,7 +35,7 @@ type Context struct {
 }
 
 func NewContext(json string, opts uint64) (Context, error) {
-	dom, err := Parse(json, opts)
+	dom, err := parse_func(json, opts)
 	if err != nil {
 		return Context{}, err
 	}
@@ -73,7 +82,7 @@ func (dom *Dom) StrStart() uintptr {
 }
 
 func (dom *Dom) Delete() {
-	C.sonic_rs_ffi_free(dom.cdom.dom, dom.cdom.str_buf, dom.cdom.error_msg_cap)
+	delete_func(dom)
 }
 
 type Array struct {
@@ -92,6 +101,10 @@ func (obj Object) Len() int {
 func (arr Array) Len() int {
 	carr := (*C.Array)(unsafe.Pointer(arr.cptr))
 	return int(uint64(carr.len) & ConLenMask)
+}
+
+func Delete(dom *Dom) {
+	C.sonic_rs_ffi_free(dom.cdom.dom, dom.cdom.str_buf, dom.cdom.error_msg_cap)
 }
 
 func Parse(data string, opt uint64) (Dom, error) {
