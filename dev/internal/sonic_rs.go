@@ -22,6 +22,9 @@ import (
 var parse_func func(data string, opt uint64) (Dom, error)
 var delete_func func(*Dom)
 
+var cgo_parse unsafe.Pointer
+var cgo_delet unsafe.Pointer
+
 func init() {
 	parse_func = Parse
 	delete_func = Delete
@@ -104,26 +107,29 @@ func (arr Array) Len() int {
 }
 
 func Delete(dom *Dom) {
-	C.sonic_rs_ffi_free(dom.cdom.dom, dom.cdom.str_buf, dom.cdom.error_msg_cap)
+	// C.sonic_rs_ffi_free(dom.cdom.dom, dom.cdom.str_buf, dom.cdom.error_msg_cap)
 }
 
 func Parse(data string, opt uint64) (Dom, error) {
-	var s = (*reflect.StringHeader)((unsafe.Pointer)(&data))
-	cdom := C.sonic_rs_ffi_parse((*C.char)(unsafe.Pointer((s.Data))), C.size_t(s.Len), C.uint64_t(opt))
-	runtime.KeepAlive(data)
-	ret := Dom{
-		cdom: cdom,
-	}
+	// var s = (*reflect.StringHeader)((unsafe.Pointer)(&data))
+	// cdom := C.sonic_rs_ffi_parse((*C.char)(unsafe.Pointer((s.Data))), C.size_t(s.Len), C.uint64_t(opt))
+	// runtime.KeepAlive(data)
+	// ret := Dom{
+	// 	cdom: cdom,
+	// }
 
-	// parse error
-	if offset := int64(cdom.error_offset); offset != -1 {
-		msg := C.GoStringN(cdom.error_msg, C.int(cdom.error_msg_len))
-		err := newError(msg, offset)
-		ret.Delete()
-		return ret, err
-	}
+	// // parse error
+	// if offset := int64(cdom.error_offset); offset != -1 {
+	// 	msg := C.GoStringN(cdom.error_msg, C.int(cdom.error_msg_len))
+	// 	err := newError(msg, offset)
+	// 	ret.Delete()
+	// 	return ret, err
+	// }
 
-	return ret, nil
+	// return ret, nil
+	return Dom{
+			cdom: C.Document {},
+		}, nil
 }
 
 // / Helper functions to eliminate CGO calls
