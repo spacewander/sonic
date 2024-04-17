@@ -116,6 +116,14 @@ typedef struct {
     int64_t vt[MAX_RECURSE];
 } StateMachine;
 
+typedef GoSlice Tape;
+
+typedef struct {
+    uint64_t kind;
+    Tape tape;
+} Token;
+
+
 int f64toa(char *out, double val);
 int i64toa(char *out, int64_t val);
 int u64toa(char *out, uint64_t val);
@@ -151,4 +159,9 @@ long validate_utf8_fast(const GoString *src);
 
 long skip_one_fast(const GoString *src, long *p);
 long get_by_path(const GoString *src, long *p, const GoSlice *path, StateMachine* sm);
+long parse_lazy(const GoString *src, long *p, Token* token, const GoSlice *path);
+long get_key(const GoString *src, long *p, const GoString *key);
+
+typedef long PosAndIdx;
+PosAndIdx get_index(const GoString *src, long *p, uint64_t index); 
 #endif

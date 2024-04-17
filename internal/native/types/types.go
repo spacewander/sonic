@@ -103,6 +103,9 @@ var _ParsingErrors = []string{
     ERR_FLOAT_INFINITY     : "float number is infinity",
     ERR_MISMATCH           : "mismatched type with value",
     ERR_INVALID_UTF8       : "invalid UTF8",
+
+	ERR_NOT_FOUND          : "not found",
+	ERR_UNSUPPORT_TYPE     : "unsupported type in path",
 }
 
 func (self ParsingError) Error() string {

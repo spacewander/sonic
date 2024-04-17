@@ -62,6 +62,9 @@ var (
     S_skip_array    uintptr
     S_skip_object   uintptr
     S_skip_number   uintptr
+	S_parse_lazy    uintptr
+	S_get_index     uintptr
+	S_get_key 		uintptr
 )
 
 var (
@@ -84,6 +87,12 @@ var (
     __SkipOneFast func(s unsafe.Pointer, p unsafe.Pointer) int
 
     __GetByPath func(s unsafe.Pointer, p unsafe.Pointer, path unsafe.Pointer, m unsafe.Pointer) int
+
+	__ParseLazy func(s unsafe.Pointer, p unsafe.Pointer, token unsafe.Pointer, path unsafe.Pointer) int
+
+	__GetIndex func(s unsafe.Pointer, p unsafe.Pointer, index uint) int
+
+	__GetKey func(s unsafe.Pointer, p unsafe.Pointer, key unsafe.Pointer) int
 
     __ValidateOne func(s unsafe.Pointer, p unsafe.Pointer, m unsafe.Pointer) int
 
@@ -134,6 +143,32 @@ func SkipOneFast(s *string, p *int) int {
 func GetByPath(s *string, p *int, path *[]interface{}, m *types.StateMachine) int {
     return __GetByPath(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(path)), rt.NoEscape(unsafe.Pointer(m)))
 }
+
+
+type token uint64
+
+type Node struct {
+	kind    int64
+	index 	[]token
+	json 	string
+}
+
+//go:nosplit
+func ParseLazy(s *string, p *int, t *Node, path *[]interface{}) (ret int) {
+    return __ParseLazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(t)), rt.NoEscape(unsafe.Pointer(path)))
+}
+
+
+//go:nosplit
+func GetKey(s *string, p *int, key *string) (ret int) {
+    return __GetKey(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(key)))
+}
+
+//go:nosplit
+func GetIndex(s *string, p *int, index uint) (ret int) {
+    return __GetIndex(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), index)
+}
+
 
 //go:nosplit
 func ValidateOne(s *string, p *int, m *types.StateMachine) int {
@@ -187,6 +222,9 @@ var stubs = []loader.GoC{
     {"_skip_one", &S_skip_one, &__SkipOne},
     {"_skip_one_fast", &S_skip_one_fast, &__SkipOneFast},
     {"_get_by_path", &S_get_by_path, &__GetByPath},
+	{"_parse_lazy", &S_parse_lazy, &__ParseLazy},
+	{"_get_key", &S_get_key, &__GetKey},
+	{"_get_index", &S_get_index, &__GetIndex},
     {"_skip_array", &S_skip_array, nil},
     {"_skip_object", &S_skip_object, nil},
     {"_skip_number", &S_skip_number, nil},

@@ -25,6 +25,7 @@ import (
     `github.com/bytedance/sonic/internal/native/types`
     `github.com/bytedance/sonic/internal/rt`
     `github.com/bytedance/sonic/option`
+	`github.com/davecgh/go-spew/spew`
 )
 
 var (
@@ -92,7 +93,9 @@ func (self *StreamDecoder) Decode(val interface{}) (err error) {
         // println("decode: ", s, e)
         // must copy string here for safety
         self.Decoder.Reset(string(self.buf[s:e]))
+		spew.Dump(self)
         err = self.Decoder.Decode(val)
+		spew.Dump(val)
         if err != nil {
             self.setErr(err)
             return 
@@ -116,7 +119,7 @@ func (self *StreamDecoder) Decode(val interface{}) (err error) {
         self.scanned += int64(self.scanp)
         self.scanp = 0
     }    
-
+	spew.Dump(val)
     return self.err
 }
 

@@ -71,6 +71,12 @@ var (
     __validate_utf8 func(s unsafe.Pointer, p unsafe.Pointer, m unsafe.Pointer) (ret int)
 
     __validate_utf8_fast func(s unsafe.Pointer)  (ret int)
+
+    __parse_lazy func(s unsafe.Pointer, p unsafe.Pointer, token unsafe.Pointer, path unsafe.Pointer) int
+
+    __get_key func(s unsafe.Pointer, p unsafe.Pointer, key unsafe.Pointer) int
+
+    __get_index func(s unsafe.Pointer, p unsafe.Pointer, index uint) int
 )
 
 //go:nosplit
@@ -171,6 +177,21 @@ func validate_one(s *string, p *int, m *types.StateMachine) (ret int) {
 //go:nosplit
 func get_by_path(s *string, p *int, path *[]interface{}, m *types.StateMachine) (ret int) {
     return __get_by_path(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(path)), rt.NoEscape(unsafe.Pointer(m)))
+}
+
+//go:nosplit
+func parse_lazy(s *string, p *int, token unsafe.Pointer,  path *[]interface{}) (ret int) {
+    return __parse_lazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(token)), rt.NoEscape(unsafe.Pointer(path)))
+}
+
+//go:nosplit
+func get_key(s *string, p *int, key unsafe.Pointer) (ret int) {
+    return __get_key(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(key)))
+}
+
+//go:nosplit
+func get_index(s *string, p *int, index uint) (ret int) {
+    return __get_index(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), index)
 }
 
 //go:nosplit

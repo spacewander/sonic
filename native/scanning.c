@@ -1923,7 +1923,6 @@ err_path:
     return -ERR_UNSUPPORT_TYPE;
 }
 
-// 
 long validate_utf8(const GoString *src, long *p, StateMachine *m) {
     xassert(*p >= 0 && src->len > *p);
     return validate_utf8_with_errors(src->buf, src->len, p, m);
@@ -1938,4 +1937,550 @@ long validate_utf8_fast(const GoString *s) {
     }
 #endif
     return validate_utf8_errors(s);
+}
+
+/* 63 ~ 64 bits */
+#define KLITERAL        (0ull << 62)
+#define KRAW            (1ull << 62)
+#define KRAW_ESC        (2ull << 62)
+#define KTYPED          (3ull << 62)
+
+/* 33 ~ 62 bits */
+#define MAX_LEN  ((1 << 30) - 1) 
+
+/* 1 ~ 32 bits */ 
+#define MAX_OFF  ((1 << 32) - 1)
+
+#define KNULL   (KLITERAL | 0)
+#define KTRUE   (KLITERAL | 1)
+#define KFALSE  (KLITERAL | 2)
+#define KOBJ_TYPE (KTYPED | 0)
+#define KARR_TYPE (KTYPED | 1)
+
+#define PACK_TOKEN(typ, len, off) ((typ) | ((len) << 32) | (off))
+
+static always_inline void visit_null(uint64_t* kind) {
+    *kind = KNULL;
+}
+
+static always_inline void visit_bool(uint64_t* kind, bool v) {
+    if (v) {
+        *kind = KTRUE;
+    } else {
+        *kind = KFALSE;
+    }
+}
+
+static always_inline void visit_obj(uint64_t* kind) {
+    *kind = KOBJ_TYPE;
+}
+
+static always_inline void visit_arr(uint64_t* kind) {
+    *kind = KARR_TYPE;
+}
+
+static always_inline void visit_raw(uint64_t* kind, uint64_t start, uint64_t end, bool esc) {
+    uint64_t len = end - start;
+    if (!esc) {
+        *kind = PACK_TOKEN(KRAW, len, start);
+    } else {
+        *kind =PACK_TOKEN(KRAW_ESC, len, start);
+    }
+}
+
+static always_inline long skip_string_escaped(const GoString *src, long *p, bool* esc) {
+    int64_t v = -1;
+    ssize_t q = *p - 1; // start position
+    // ssize_t e = advance_string(src, *p, &v, flags);
+    ssize_t e = advance_string_default(src, *p, &v);
+
+    if (v != -1) {
+        *esc = true;
+    }
+
+    /* check for errors */
+    if (e < 0) {
+        return e;
+    }
+
+    /* update the position */
+    *p = e;
+    return q;
+}
+
+
+static always_inline long parse_prmitives(const GoString *src, long *p, Token* token) {
+    long i = *p - 1;
+    char c = src->buf[i];
+    switch (c) {
+        case 't': {
+            if (i + 3 >= src->len) {
+                *p = i;
+                return -ERR_EOF;
+            }
+            if (src->buf[i + 1] == 'r' && src->buf[i + 2] == 'u' && src->buf[i + 3] == 'e') {
+                visit_bool(&token->kind, true);
+                *p = i + 4;
+                return 0;
+            }
+            break;
+        }
+        case 'f': {
+            if (i + 4 >= src->len) {
+                *p = i;
+                return -ERR_EOF;
+            }
+            if (src->buf[i + 1] == 'a' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 's' && src->buf[i + 4] == 'e') {
+                visit_bool(&token->kind, false);
+                *p = i + 5;
+                return 0;
+            }
+            break;
+        }
+        case 'n': {
+            if (i + 3 >= src->len) {
+                *p = i;
+                return -ERR_EOF;
+            }
+            if (src->buf[i + 1] == 'u' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 'l') {
+                visit_null(&token->kind);
+                *p = i + 4;
+                return 0;
+            }
+            break;
+        }
+        case '-': case '0' ... '9': {
+            long r = skip_number(src, p);
+            if (r < 0) {
+                *p = i;
+                return -ERR_INVAL;
+            }
+            visit_raw(&token->kind, i, *p, false);
+            return 0;
+        }
+        case '"': {
+            bool esc = false;
+            long r = skip_string_escaped(src, p, &esc);
+            if (r < 0) {
+                return r;
+            }
+            visit_raw(&token->kind, i, *p, esc);
+            return 0;
+        }
+        default:
+            return -ERR_INVAL;
+    }
+    return -ERR_INVAL;
+}
+
+#define MUST_RETRY 0x12345
+
+static always_inline long load_lazy(const GoString *src, long *p, Token* token) {
+    char c = 0;
+    xprintf("hello ");
+    xprintf("%d ", *p);
+    c = advance_ns(src, p);
+
+    bool is_obj = true;
+    xprintf("%g", src);
+    if (unlikely(c != '{' && c != '[')) {
+        return parse_prmitives(src, p, token);
+    }
+
+    // length is marked in tape Goslice, skip here.
+    if (c == '{') {
+        visit_obj(&token->kind);
+    } else {
+        visit_arr(&token->kind);
+        is_obj = false;
+    }
+    
+    uint64_t* kind = (uint64_t*)(token->tape.buf);
+    uint64_t kcnt = 0;
+    uint64_t last_is_key = false;
+    uint64_t commas = 0;
+    bool is_end = false;
+    long i = *p;
+    xprintf("case 2 %g\n", src);
+    for (; i < src->len;) {
+        c = advance_ns(src, p);
+        i = *p;
+        {
+            GoString gs =   {
+                .buf = src->buf + i,
+                .len = src->len - i
+            };
+            xprintf("remain1 is %g\n", &gs);
+        }
+        xprintf("case 2 c is %c\n", c);
+        xprintf("kind is  %p val is  %d\n", kind, *kind);
+
+        // FIXME: the code is so ugly now...
+        switch (c) {
+            case 't': {
+                if (i + 3 >= src->len) {
+                    *p = i;
+                    return -ERR_EOF;
+                }
+                if (src->buf[i + 1] == 'r' && src->buf[i + 2] == 'u' && src->buf[i + 3] == 'e') {
+                    visit_bool(kind, true);
+                    *p = i + 4;
+                }
+                break;
+            }
+            case 'f': {
+                if (i + 4 >= src->len) {
+                    *p = i;
+                    return -ERR_EOF;
+                }
+                if (src->buf[i + 1] == 'a' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 's' && src->buf[i + 4] == 'e') {
+                    visit_bool(kind, false);
+                    *p = i + 5;
+                }
+                break;
+            }
+            case 'n': {
+                if (i + 3 >= src->len) {
+                    *p = i;
+                    return -ERR_EOF;
+                }
+                if (src->buf[i + 1] == 'u' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 'l') {
+                    visit_null(kind);
+                    *p = i + 4;
+                }
+                break;
+            }
+            case '-': case '0' ... '9': {
+                long r = skip_number_fast(src, p);
+                if (r < 0) {
+                    return -ERR_INVAL;
+                }
+                visit_raw(kind, r, *p, false);
+                break;
+            }
+            case '"': {
+                bool esc = false;
+                {
+                    GoString gs =   {
+                        .buf = src->buf + *p,
+                        .len = src->len - *p,
+                    };
+                    xprintf("remain2 is %g\n", &gs);
+                }
+                long r = skip_string_escaped(src, p, &esc);
+                if (esc) {
+                   xprintf("escaped is start %d, last is %d\n", r, *p);
+                }
+                if (r < 0) {
+                    return r;
+                }
+                visit_raw(kind, r, *p, esc);
+                {
+                    GoString gs =   {
+                        .buf = src->buf + r,
+                        .len = *p - r,
+                    };
+                    xprintf("remain str is %g\n", &gs);
+                }
+                break;
+            }
+            case '{': {
+                long r = skip_container_fast(src, p, '{', '}');
+                if (r < 0) {
+                    return r;
+                }
+                visit_raw(kind, r, *p, false);
+                break;
+            }
+            case '[': {
+                long r = skip_container_fast(src, p, '[', ']');
+                if (r < 0) {
+                    return r;
+                }
+                visit_raw(kind, r, *p, false);
+                break;
+            }
+            case ':': {
+                if (is_obj && last_is_key) {
+                    continue;
+                }
+                return -ERR_INVAL;
+            }
+            case ',': {
+                commas += 1;
+                if (!is_obj) {
+                    continue;
+                }
+                if (is_obj && !last_is_key ) {
+                    continue;
+                }
+                return -ERR_INVAL;
+            }
+            case '}': case ']': {
+                is_end = true;
+                token->tape.len = kcnt;
+                break;
+            }
+            default: {
+                return -ERR_INVAL;
+            }
+        }
+
+        if (is_end) {
+            break;
+        }
+        GoString gs =  {
+            .buf = src->buf + *p,
+            .len = src->len - *p
+        };
+        xprintf("remain3 is %g\n", &gs);
+
+        // next token
+        i = *p;
+        kind += 1;
+        kcnt += 1;
+        if (is_obj) {
+            last_is_key = !last_is_key;
+        }
+        if (kcnt == token->tape.cap) {
+            token->tape.len = kcnt;
+            // resize tape
+            return -MUST_RETRY;
+        }
+    }
+
+    // check matches
+    if (last_is_key) {
+          xprintf("last is key is\n");
+        return -ERR_INVAL;
+    }
+     xprintf("remain3 isxx %d is_obj %d \n", commas, is_obj);
+    return 0;
+}
+
+long parse_lazy(const GoString *src, long *p, Token* token, const GoSlice *path) {
+    if (path == NULL) {
+        return load_lazy(src, p, token);
+    }
+
+    GoIface *ps = (GoIface*)(path->buf);
+    GoIface *pe = (GoIface*)(path->buf) + path->len;
+    char c = 0;
+    int64_t index;
+    long found;
+
+query:
+    /* to be safer for invalid json, use slower skip for the demanded fields */
+    if (ps == pe) {
+        return load_lazy(src, p, token);
+    }
+
+    /* match type: should query key in object, query index in array */
+    c = advance_ns(src, p);
+    if (is_str(ps)) {
+        if (c != '{') {
+            goto err_inval;
+        }
+        goto skip_in_obj;
+    } else if (is_int(ps)) {
+        if (c != '[') {
+            goto err_inval;
+        }
+
+        index = get_int(ps);
+        if (index < 0) {
+            goto err_path;
+        }
+
+        goto skip_in_arr;
+    } else {
+        goto err_path;
+    }
+
+skip_in_obj:
+    c = advance_ns(src, p);
+    if (c == '}') {
+        goto not_found;
+    }
+    if (c != '"') {
+        goto err_inval;
+    }
+
+    /* parse the object key */
+    found = match_key(src, p, get_str(ps));
+    if (found < 0) {
+        return found; // parse string errors
+    }
+
+    /* value should after : */
+    c = advance_ns(src, p);
+    if (c != ':') {
+        goto err_inval;
+    }
+    if (found) {
+        ps++;
+        goto query;
+    }
+
+    /* skip the unknown fields */
+    skip_one_fast(src, p);
+    c = advance_ns(src, p);
+    if (c == '}') {
+        goto not_found;
+    }
+    if (c != ',') {
+        goto err_inval;
+    }
+    goto skip_in_obj;
+
+skip_in_arr:
+    /* check empty array */
+    c = advance_ns(src, p);
+    if (c == ']') {
+        goto not_found;
+    }
+    *p -= 1;
+
+    /* skip array elem one by one */
+    while (index-- > 0) {
+        skip_one_fast(src, p);
+        c = advance_ns(src, p);
+        if (c == ']') {
+            goto not_found;
+        }
+        if (c != ',') {
+            goto err_inval;
+        }
+    }
+    ps++;
+    goto query;
+
+not_found:
+    *p -= 1; // backward error position
+    return -ERR_NOT_FOUND;
+err_inval:
+    *p -= 1;
+    return -ERR_INVAL;
+err_path:
+    *p -= 1;
+    return -ERR_UNSUPPORT_TYPE;
+}
+
+// PosAndIdx is encoding as:
+// Err  or  Index   | Pos
+// 32 bits          | 32 bits
+static always_inline PosAndIdx pack_pos_and_idx(long ret, long pos, long idx) {
+    if (ret < 0) {
+       return ret;
+    } else {
+        return ((idx << 32) | pos);
+    }
+}
+
+long get_key_impl(const GoString *src, long *p, const GoString *key, uint64_t *index) {
+    char c = 0;
+    long found = 0;
+    long r = 0;
+
+    /* match type: should query key in object, query index in array */
+    c = advance_ns(src, p);
+    if (c != '{') {
+        goto err_inval;
+    }
+    goto skip_in_obj;
+
+skip_in_obj:
+    c = advance_ns(src, p);
+    if (c == '}') {
+        goto not_found;
+    }
+    if (c != '"') {
+        goto err_inval;
+    }
+
+    /* parse the object key */
+    found = match_key(src, p, *key);
+    if (found < 0) {
+        return found; // parse string errors
+    }
+
+    /* value should after : */
+    c = advance_ns(src, p);
+    if (c != ':') {
+        goto err_inval;
+    }
+    if (found) {
+        return skip_one_fast(src, p);
+    }
+
+    /* skip the unknown fields */
+    r = skip_one_fast(src, p);
+    if (r < 0) {
+        return r;
+    }
+
+    *index += 1;
+    c = advance_ns(src, p);
+    if (c == '}') {
+        goto not_found;
+    }
+    if (c != ',') {
+        goto err_inval;
+    }
+    goto skip_in_obj;
+
+not_found:
+    *p -= 1; // backward error position
+    return -ERR_NOT_FOUND;
+err_inval:
+    *p -= 1;
+    return -ERR_INVAL;
+}
+
+PosAndIdx get_key(const GoString *src, long *p, const GoString *key) {
+    uint64_t idx = 0;
+    long r = get_key_impl(src, p, key, &idx);
+    return pack_pos_and_idx(r, *p, idx);
+}
+
+long get_index(const GoString *src, long *p, unsigned long index) {
+    char c = 0;
+    long r = 0;
+
+    /* match type: should query key in object, query index in array */
+    c = advance_ns(src, p);
+    if (c != '[') {
+        goto err_inval;
+    }
+
+    /* check empty array */
+    c = advance_ns(src, p);
+    if (c == ']') {
+        goto not_found;
+    }
+    *p -= 1;
+
+    /* skip array elem one by one */
+    while (index-- > 0) {
+        r = skip_one_fast(src, p);
+        if (r < 0) {
+            return r;
+        }
+    
+        c = advance_ns(src, p);
+        if (c == ']') {
+            goto not_found;
+        }
+        if (c != ',') {
+            goto err_inval;
+        }
+    }
+    return skip_one_fast(src, p);
+
+not_found:
+    *p -= 1; // backward error position
+    return -ERR_NOT_FOUND;
+err_inval:
+    *p -= 1;
+    return -ERR_INVAL;
 }

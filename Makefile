@@ -43,7 +43,7 @@ CFLAGS			+= -fno-rtti
 CFLAGS			+= -fno-stack-protector
 CFLAGS			+= -nostdlib
 CFLAGS			+= -O3
-CFLAGS			+= -Wall -Werror
+CFLAGS			+= -Wall -Werror -DDEBUG
 
 NATIVE_SRC		:= $(wildcard native/*.h)
 NATIVE_SRC		+= $(wildcard native/*.c)
