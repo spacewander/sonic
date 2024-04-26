@@ -1,51 +1,22 @@
 package ast
 
 import (
-	"unsafe"
+	"encoding/json"
 
+	"github.com/bytedance/sonic/encoder"
+	"github.com/bytedance/sonic/internal/native/types"
 	"github.com/bytedance/sonic/internal/rt"
 )
 
 // 0..4 bits for basic type
 const (
-	_TYPE_BITS = 4
-	_TYPE_MASK = 0xF
-
 	_V_NONE  = 0
-	_V_NULL  = 1
-	_V_ERROR = 2
-	_V_TRUE  = 3
-	_V_FALSE = 4
-
-	_V_INT64   = 5
-	_V_UINT64  = 6
-	_V_FLOAT64 = 7
-	_V_NUMBER  = 8 // json.Number
-
-	_V_STRING = 9
-	_V_ARRAY  = 10
-	_V_OBJECT = 11
-	_V_ANY    = 12
-)
-
-// 4..8 bits for subtype of Raw
-const (
-	_RAW_BITS = 4
-	_RAW_MASK = 0xF0
-
-	_V_RAW     = 0x10
-	_V_RAW_ESC = 0x20
+	_V_ERROR  = 0
 )
 
 type valueType uint8
 
-type Node struct {
-	typ valueType
-	// val is value for scalar type or length for container type
-	val uint64
-	// pointer of non-scalar node
-	ptr unsafe.Pointer
-}
+
 
 type Pair struct {
     Key   string
@@ -56,7 +27,7 @@ type Pair struct {
 
 // Exists returns false only if the self is nil or empty node V_NONE
 func (self *Node) Exists() bool {
-	return self.Valid() && self.getType() != _V_NONE
+	return self.Valid() && self.Kind != _V_NONE
 }
 
 // Valid reports if self is NOT V_ERROR or nil
@@ -64,7 +35,7 @@ func (self *Node) Valid() bool {
 	if self == nil {
 		return false
 	}
-	return self.getType() != _V_ERROR
+	return self.Kind != _V_ERROR
 }
 
 // Check checks if the node itself is valid, and return:
@@ -73,19 +44,34 @@ func (self *Node) Valid() bool {
 func (self *Node) Check() error {
 	if self == nil {
 		return ErrNotExist
-	} else if self.getType() == _V_ERROR {
+	} else if self.Kind == _V_ERROR {
 		return self
 	} else {
 		return nil
 	}
 }
 
-func (self *Node) IsRaw() bool{
-	return self != nil && self.isRaw()
+// func (self *Node) IsRaw() bool{
+// 	return self != nil && (self.Flag & _F_RAW != 0)
+// }
+
+const (
+	_F_MUT = types.Flag(1<<2)
+	// _F_RAW = types.Flag(1<<1)
+)
+
+
+func (self *Node) IsMut() bool{
+	return self != nil && len(self.mut) != 0
 }
 
-
 /***************** New APIs ***********************/
+
+var (
+    nullNode  = types.NewNode("null", false)
+    trueNode  = types.NewNode("true", false)
+    falseNode = types.NewNode("false", false)
+)
 
 // NewRaw creates a node of raw json.
 // If the input json is invalid, NewRaw returns a error Node.
@@ -93,7 +79,7 @@ func NewRaw(json string) Node {
 	p := NewParser(json)
     start, err := p.skip()
     if err != nil {
-        return *newError(err)
+        return newError(err)
     }
 
 	// TODO: FIXME, should has escaped flags
@@ -102,23 +88,16 @@ func NewRaw(json string) Node {
 
 // NewAny creates a node of type V_ANY if any's type isn't Node or *Node
 func NewAny(val interface{}) Node {
-    switch n := val.(type) {
-    case Node:
-        return n
-    case *Node:
-        return *n
-    default:
-        return Node{
-            typ: _V_ANY,
-			val: 0,
-            ptr: unsafe.Pointer(&val),
-        }
-    }
+    js, err := encoder.Encode(val, 0)
+	if err != nil {
+		return newError(err)
+	}
+	return NewRaw(rt.Mem2Str(js))
 }
 
 // NewNull creates a node of type V_NULL
 func NewNull() Node {
-    return nullNode
+    return Node{nullNode, nil}
 }
 
 // NewBool creates a node of type bool:
@@ -126,74 +105,41 @@ func NewNull() Node {
 //  If v is false, returns V_FALSE node
 func NewBool(v bool) Node {
    if v {
-		return trueNode
+		return Node{trueNode, nil}
    } else {
-		return falseNode
+		return Node{falseNode, nil}
    }
 }
 
 // NewNumber creates a json.Number node
 // v must be a decimal string complying with RFC8259
-func NewNumber(v string) Node {
-    return Node{
-		typ: _V_NUMBER,
-       	val: uint64(len(v)),
-		ptr: rt.StrPtr(v),
-    }
+func NewNumber(v json.Number) Node {
+    return newRawNodeUnsafe(string(v), false)
 }
 
 // NewString creates a node of type V_STRING. 
 // v is considered to be a valid UTF-8 string, which means it won't be validated and unescaped.
 // when the node is encoded to json, v will be escaped.
 func NewString(v string) Node {
-    return Node{
-		typ: _V_STRING,
-       	val: uint64(len(v)),
-		ptr: rt.StrPtr(v),
-    }
+	s := encoder.Quote(v)
+	esc := len(s) > len(v) + 2
+	return newRawNodeUnsafe(s, esc)
 }
 
 func NewInt(v int) Node {
-	if v >= 0 {
-		return NewUint(uint(v))
-	} else {
-		cast := *(*uint64)(unsafe.Pointer(&v))
-		return Node{
-			typ: _V_INT64,
-			val: cast,
-		}
+	s, err := encoder.Encode(v, 0)
+	if err != nil {
+		return newError(err)
 	}
-}
-
-func NewUint(v uint) Node {
-	return Node{
-		typ: _V_UINT64,
-		val: uint64(v),
-	}
+	return newRawNodeUnsafe(rt.Mem2Str(s), false)
 }
 
 func NewFloat(v float64) Node {
-	cast := *(*uint64)(unsafe.Pointer(&v))
-	return Node{
-		typ: _V_FLOAT64,
-		val: cast,
+	s, err := encoder.Encode(v, 0)
+	if err != nil {
+		return newError(err)
 	}
-}
-
-// NewObject creates a node of type V_OBJECT,
-// using v as its underlying children
-func NewObject(v []Pair) Node {
-    s := new(linkedPairs)
-    s.FromSlice(v)
-    return newObject(s)
-}
-
-// NewArray creates a node of type V_ARRAY,
-// using v as its underlying children
-func NewArray(v []Node) Node {
-    s := new(linkedNodes)
-    s.FromSlice(v)
-    return newArray(s)
+	return newRawNodeUnsafe(rt.Mem2Str(s), false)
 }
 
 // NewBytes encodes given src with Base64 (RFC 4648), and creates a node of type V_STRING.

@@ -17,9 +17,10 @@
 package types
 
 import (
-    `fmt`
-    `sync`
-    `unsafe`
+	"fmt"
+	"sync"
+	"sync/atomic"
+	"unsafe"
 )
 
 type ValueType int
@@ -44,6 +45,7 @@ const (
     _         ValueType = 12    // V_ARRAY_END
     _         ValueType = 13    // V_OBJECT_END
     V_MAX
+    V_NUMBER ValueType = 33
 )
 
 const (
@@ -162,4 +164,156 @@ func NewDbuf() *byte {
 
 func FreeDbuf(p *byte) {
     digitPool.Put(p)
+}
+
+type Flag uint16
+
+
+type Type uint8 
+
+const (
+    T_NULL    Type = 2
+    T_TRUE    Type = 3
+    T_FALSE   Type = 4
+    T_ARRAY   Type = 5
+    T_OBJECT  Type = 6
+    T_STRING  Type = 7
+    T_NUMBER  Type = 8
+)
+
+type Token struct {
+	Kind Type
+	Flag Flag
+	Off uint32
+	Len uint32
+}
+
+
+type Node struct {
+	Kind Type
+	Flag Flag
+	JSON string
+	Kids []Token
+}
+
+const (
+	// _F_RAW 	= Flag(1<<0)
+	_F_ESC	= Flag(1<<0)
+)
+
+type stats struct {
+    min int64
+    max int64
+    last int64
+    over int64
+}
+
+const _DefaultTokenSize = 8 
+
+var tokenSizeStats = stats{
+    min: _DefaultTokenSize,
+    max: _DefaultTokenSize,
+    last: _DefaultTokenSize,
+}
+
+func avg(min, max, last int64) int64 {
+    return (last + (max + min)/2)
+}
+
+// TODO
+func PredictTokenSize() int64 {
+    return avg((atomic.LoadInt64(&tokenSizeStats.min)), (atomic.LoadInt64(&tokenSizeStats.max)), (atomic.LoadInt64(&tokenSizeStats.last)))
+}
+
+// TODO
+func RecordTokenSize(last int64) {
+    min, max, lastSize, over := (atomic.LoadInt64(&tokenSizeStats.min)), (atomic.LoadInt64(&tokenSizeStats.max)), (atomic.LoadInt64(&tokenSizeStats.last)), (atomic.LoadInt64(&tokenSizeStats.last))
+
+    avg := avg(min, max, lastSize)
+
+    if last > max || last > avg {
+        // fast enlarge 2x
+        max = last
+        over = 0
+    } else if last < avg {
+        over++
+        if over > 5 && last < max {
+            // slow shrink 1/4
+            max -= (max - last) >> 1
+            over = 0
+        }
+    }
+
+    if last < min {
+        min = last
+    }
+    
+    lastSize = last
+	atomic.StoreInt64(&tokenSizeStats.min, min)
+	atomic.StoreInt64(&tokenSizeStats.max, max)
+	atomic.StoreInt64(&tokenSizeStats.last, lastSize)
+	atomic.StoreInt64(&tokenSizeStats.over, over)
+}
+
+func (n *Node) Grow()  {
+    n.Kids = make([]Token, 0, 2 * cap(n.Kids))
+}
+
+// encoding 64-bit Token as follows:
+const (
+	/* specific error code */
+	MUST_RETRY = 0x12345
+)
+
+// func (t Flag) IsRaw() bool {
+// 	return t & _F_RAW != 0
+// }
+
+func (t Flag) IsEsc() bool {
+	return t & _F_ESC != 0
+}
+
+func (t Token) Peek(json string) byte {
+	return json[t.Off]
+}
+
+func (t Token) Raw(json string) string {
+	return json[t.Off:t.Off + t.Len]
+}
+
+// for T_OBJECT | T_ARRAY, must remember to handle Kids
+func NewNode(json string, hasEsc bool) Node {
+    flag := Flag(0)
+    if hasEsc {
+        flag |= _F_ESC
+    }
+    kind := typeJumpTable[json[0]]
+	// if kind == T_OBJECT || kind == T_ARRAY {
+    //     flag |= _F_RAW
+	// } 
+    return Node{
+        Kind: kind,
+        Flag: flag,
+        JSON: json,
+    }
+}
+
+var typeJumpTable = [256]Type{
+    '"' : T_STRING,
+    '-' : T_NUMBER,
+    '0' : T_NUMBER,
+    '1' : T_NUMBER,
+    '2' : T_NUMBER,
+    '3' : T_NUMBER,
+    '4' : T_NUMBER,
+    '5' : T_NUMBER,
+    '6' : T_NUMBER,
+    '7' : T_NUMBER,
+    '8' : T_NUMBER,
+    '9' : T_NUMBER,
+    '[' : T_ARRAY,
+    'f' : T_FALSE,
+    'n' : T_NULL,
+    't' : T_TRUE,
+    '{' : T_OBJECT,
 }

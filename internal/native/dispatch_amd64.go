@@ -145,16 +145,8 @@ func GetByPath(s *string, p *int, path *[]interface{}, m *types.StateMachine) in
 }
 
 
-type token uint64
-
-type Node struct {
-	kind    int64
-	index 	[]token
-	json 	string
-}
-
 //go:nosplit
-func ParseLazy(s *string, p *int, t *Node, path *[]interface{}) (ret int) {
+func ParseLazy(s *string, p *int, t *types.Node, path *[]interface{}) (ret int) {
     return __ParseLazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(t)), rt.NoEscape(unsafe.Pointer(path)))
 }
 

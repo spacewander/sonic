@@ -1939,53 +1939,35 @@ long validate_utf8_fast(const GoString *s) {
     return validate_utf8_errors(s);
 }
 
-/* 63 ~ 64 bits */
-#define KLITERAL        (0ull << 62)
-#define KRAW            (1ull << 62)
-#define KRAW_ESC        (2ull << 62)
-#define KTYPED          (3ull << 62)
+#define T_NULL   (2)
+#define T_TRUE   (3)
+#define T_FALSE  (4)
+#define T_ARRAY  (5)
+#define T_OBJECT (6)
+#define T_STRING (7)
+#define T_NUMBER (8)
 
-/* 33 ~ 62 bits */
-#define MAX_LEN  ((1 << 30) - 1) 
+#define F_ESC (1<<0)
 
-/* 1 ~ 32 bits */ 
-#define MAX_OFF  ((1 << 32) - 1)
-
-#define KNULL   (KLITERAL | 0)
-#define KTRUE   (KLITERAL | 1)
-#define KFALSE  (KLITERAL | 2)
-#define KOBJ_TYPE (KTYPED | 0)
-#define KARR_TYPE (KTYPED | 1)
-
-#define PACK_TOKEN(typ, len, off) ((typ) | ((len) << 32) | (off))
-
-static always_inline void visit_null(uint64_t* kind) {
-    *kind = KNULL;
+static always_inline void visit_null(Token* token) {
+    token->kind = T_NULL;
 }
 
-static always_inline void visit_bool(uint64_t* kind, bool v) {
+static always_inline void visit_bool(Token* token, bool v) {
     if (v) {
-        *kind = KTRUE;
+        token->kind = T_TRUE;
     } else {
-        *kind = KFALSE;
+        token->kind = T_FALSE;
     }
 }
 
-static always_inline void visit_obj(uint64_t* kind) {
-    *kind = KOBJ_TYPE;
-}
-
-static always_inline void visit_arr(uint64_t* kind) {
-    *kind = KARR_TYPE;
-}
-
-static always_inline void visit_raw(uint64_t* kind, uint64_t start, uint64_t end, bool esc) {
-    uint64_t len = end - start;
-    if (!esc) {
-        *kind = PACK_TOKEN(KRAW, len, start);
-    } else {
-        *kind =PACK_TOKEN(KRAW_ESC, len, start);
+static always_inline void visit_raw(Token* token, uint8_t kind, uint64_t start, uint64_t end, bool esc) {
+    token->kind = kind;
+    if (esc) {
+        token->flag |= F_ESC;
     }
+    token->len = end - start;
+    token->off = start;
 }
 
 static always_inline long skip_string_escaped(const GoString *src, long *p, bool* esc) {
@@ -2009,7 +1991,7 @@ static always_inline long skip_string_escaped(const GoString *src, long *p, bool
 }
 
 
-static always_inline long parse_prmitives(const GoString *src, long *p, Token* token) {
+static always_inline long parse_prmitives(const GoString *src, long *p, Node* node) {
     long i = *p - 1;
     char c = src->buf[i];
     switch (c) {
@@ -2019,7 +2001,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
                 return -ERR_EOF;
             }
             if (src->buf[i + 1] == 'r' && src->buf[i + 2] == 'u' && src->buf[i + 3] == 'e') {
-                visit_bool(&token->kind, true);
+                node->kind = T_TRUE;
                 *p = i + 4;
                 return 0;
             }
@@ -2031,7 +2013,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
                 return -ERR_EOF;
             }
             if (src->buf[i + 1] == 'a' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 's' && src->buf[i + 4] == 'e') {
-                visit_bool(&token->kind, false);
+                node->kind = T_FALSE;
                 *p = i + 5;
                 return 0;
             }
@@ -2043,7 +2025,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
                 return -ERR_EOF;
             }
             if (src->buf[i + 1] == 'u' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 'l') {
-                visit_null(&token->kind);
+                node->kind = T_NULL;
                 *p = i + 4;
                 return 0;
             }
@@ -2055,7 +2037,9 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
                 *p = i;
                 return -ERR_INVAL;
             }
-            visit_raw(&token->kind, i, *p, false);
+            node->kind = T_NUMBER;
+            // node->json.buf = src->buf + i;
+            // node->json.len = *p - i;
             return 0;
         }
         case '"': {
@@ -2064,7 +2048,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
             if (r < 0) {
                 return r;
             }
-            visit_raw(&token->kind, i, *p, esc);
+            node->kind = T_STRING;
             return 0;
         }
         default:
@@ -2075,7 +2059,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Token* t
 
 #define MUST_RETRY 0x12345
 
-static always_inline long load_lazy(const GoString *src, long *p, Token* token) {
+static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
     char c = 0;
     xprintf("hello ");
     xprintf("%d ", *p);
@@ -2084,18 +2068,18 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
     bool is_obj = true;
     xprintf("%g", src);
     if (unlikely(c != '{' && c != '[')) {
-        return parse_prmitives(src, p, token);
+        return parse_prmitives(src, p, node);
     }
 
     // length is marked in tape Goslice, skip here.
     if (c == '{') {
-        visit_obj(&token->kind);
+        node->kind = T_OBJECT;
     } else {
-        visit_arr(&token->kind);
+        node->kind = T_ARRAY;
         is_obj = false;
     }
     
-    uint64_t* kind = (uint64_t*)(token->tape.buf);
+    Token* kind = (Token*)(node->tape.buf);
     uint64_t kcnt = 0;
     uint64_t last_is_key = false;
     uint64_t commas = 0;
@@ -2155,7 +2139,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
                 if (r < 0) {
                     return -ERR_INVAL;
                 }
-                visit_raw(kind, r, *p, false);
+                visit_raw(kind, T_NUMBER, r, *p, false);
                 break;
             }
             case '"': {
@@ -2174,7 +2158,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
                 if (r < 0) {
                     return r;
                 }
-                visit_raw(kind, r, *p, esc);
+                visit_raw(kind, T_STRING, r, *p, esc);
                 {
                     GoString gs =   {
                         .buf = src->buf + r,
@@ -2189,7 +2173,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
                 if (r < 0) {
                     return r;
                 }
-                visit_raw(kind, r, *p, false);
+                visit_raw(kind, T_OBJECT, r, *p, false);
                 break;
             }
             case '[': {
@@ -2197,7 +2181,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
                 if (r < 0) {
                     return r;
                 }
-                visit_raw(kind, r, *p, false);
+                visit_raw(kind, T_ARRAY, r, *p, false);
                 break;
             }
             case ':': {
@@ -2218,7 +2202,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
             }
             case '}': case ']': {
                 is_end = true;
-                token->tape.len = kcnt;
+                node->tape.len = kcnt;
                 break;
             }
             default: {
@@ -2229,11 +2213,11 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
         if (is_end) {
             break;
         }
-        GoString gs =  {
-            .buf = src->buf + *p,
-            .len = src->len - *p
-        };
-        xprintf("remain3 is %g\n", &gs);
+        // GoString gs =  {
+        //     .buf = src->buf + *p,
+        //     .len = src->len - *p
+        // };
+        // xprintf("remain3 is %g\n", &gs);
 
         // next token
         i = *p;
@@ -2242,8 +2226,8 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
         if (is_obj) {
             last_is_key = !last_is_key;
         }
-        if (kcnt == token->tape.cap) {
-            token->tape.len = kcnt;
+        if (kcnt == node->tape.cap) {
+            node->tape.len = kcnt;
             // resize tape
             return -MUST_RETRY;
         }
@@ -2258,9 +2242,9 @@ static always_inline long load_lazy(const GoString *src, long *p, Token* token) 
     return 0;
 }
 
-long parse_lazy(const GoString *src, long *p, Token* token, const GoSlice *path) {
+long parse_lazy(const GoString *src, long *p, Node* node, const GoSlice *path) {
     if (path == NULL) {
-        return load_lazy(src, p, token);
+        return load_lazy(src, p, node);
     }
 
     GoIface *ps = (GoIface*)(path->buf);
@@ -2272,7 +2256,7 @@ long parse_lazy(const GoString *src, long *p, Token* token, const GoSlice *path)
 query:
     /* to be safer for invalid json, use slower skip for the demanded fields */
     if (ps == pe) {
-        return load_lazy(src, p, token);
+        return load_lazy(src, p, node);
     }
 
     /* match type: should query key in object, query index in array */

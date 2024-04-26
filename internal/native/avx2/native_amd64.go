@@ -180,8 +180,8 @@ func get_by_path(s *string, p *int, path *[]interface{}, m *types.StateMachine) 
 }
 
 //go:nosplit
-func parse_lazy(s *string, p *int, token unsafe.Pointer,  path *[]interface{}) (ret int) {
-    return __parse_lazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(token)), rt.NoEscape(unsafe.Pointer(path)))
+func parse_lazy(s *string, p *int, node *types.Node,  path *[]interface{}) (ret int) {
+    return __parse_lazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(node)), rt.NoEscape(unsafe.Pointer(path)))
 }
 
 //go:nosplit
