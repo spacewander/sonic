@@ -188,6 +188,9 @@ type Token struct {
 	Len uint32
 }
 
+func (t Type) IsComplex() bool {
+    return t == T_ARRAY || t == T_OBJECT
+}
 
 type Node struct {
 	Kind Type

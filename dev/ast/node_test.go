@@ -25,6 +25,9 @@ func getSample(width int, depth int) string {
 }
 
 func TestNodeParse(t *testing.T) {
+	n1, err := NewParser(`[1,"1",true]`).Parse()
+	require.NoError(t, err)
+	spew.Dump(n1.Kids)
 	src := getSample(100, 0)
 	n, err := NewParser(src).Parse()
 	require.NoError(t, err)

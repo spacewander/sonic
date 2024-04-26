@@ -76,14 +76,11 @@ var (
 // NewRaw creates a node of raw json.
 // If the input json is invalid, NewRaw returns a error Node.
 func NewRaw(json string) Node {
-	p := NewParser(json)
-    start, err := p.skip()
-    if err != nil {
-        return newError(err)
-    }
-
-	// TODO: FIXME, should has escaped flags
-    return newRawNodeUnsafe(json[start: p.pos], true)
+	n, e := NewParser(json).Parse()
+	if e != nil {
+		return newError(e)
+	}
+	return n
 }
 
 // NewAny creates a node of type V_ANY if any's type isn't Node or *Node
@@ -151,7 +148,57 @@ func NewBytes(src []byte) Node {
     return NewString(out)
 }
 
+func (self *Node) should(t types.Type) error {
+    if err := self.Error(); err != "" {
+        return self
+    }
+    if  self.Kind != t {
+        return ErrUnsupportType
+    }
+    return nil
+}
+
+func (n *Node) get(key string) (Node)  {
+	t, err := n.objAt(key)
+	if err != nil {
+		return newError(err)
+	}
+	return n.sub(*t)
+}
+
+func (n *Node) index(key int) (Node)  {
+	t := n.arrAt(key)
+	if t == nil {
+		return emptyNode
+	}
+	return n.sub(*t)
+}
+
+
+func (self *Node) GetByPath(path ...interface{}) Node {
+	if l := len(path); l == 0 {
+		return *self
+	} else if l == 1 {
+		switch p := path[0].(type) {
+		case int:
+			return self.index(p)
+		case string:
+			return self.get(p)
+		default:
+			panic("path must be either int or string")
+		}
+	} else {
+		n, err := NewParser(self.JSON).getByPath(path...)
+		if err != nil {
+			return newError(err)
+		}
+		return n
+	}
+}
+
 /***************** Cast APIs ***********************/
+
+
 
 
 /***************** Set APIs ***********************/

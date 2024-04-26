@@ -15,45 +15,85 @@ type Node struct {
 }
 
 
-// func (n *node) SetAt(i int32, val unsafe.Pointer) {
-// 	x := len(n.mut)
-// 	n.tape[i] = token(_K_MUT|x)
-// 	n.mut = append(n.mut, val)
-// }
+func (n *Node) arrSet(i int, typ types.Type, val unsafe.Pointer) error {
+	t := n.arrAt(i)
+	if t == nil {
+		return ErrNotExist
+	}
+	l := len(n.mut)
+	*t = types.Token{
+		Kind: typ,
+		Flag: _F_MUT,
+		Off: uint32(l),
+	}
+	n.mut = append(n.mut, val)
+	n.Flag |= _F_MUT
+	return nil
+}
 
+func (n *Node) objSet(key string, typ types.Type, val unsafe.Pointer) error {
+	t, err := n.objAt(key)
+	if err != nil {
+		return err
+	}
+	l := len(n.mut)
+	*t = types.Token{
+		Kind: typ,
+		Flag: _F_MUT,
+		Off: uint32(l),
+	}
+	n.mut = append(n.mut, val)
+	n.Flag |= _F_MUT
+	return nil
+}
 
-// func (n *Node) objAt(i int) (Pair, error)  {
-// 	key, err := strForToken(n.Kids[i * 2], n.JSON)
-// 	if err != nil {
-// 		return Pair{}, err
-// 	}
+func (n *Node) objAt(key string) (*types.Token, error)  {
+	for i := 0; i<len(n.Kids)/2; i++ {
+		k, err := strForToken(n.Kids[i * 2], n.JSON)
+		if err != nil {
+			return nil, err
+		}
+		if k == key {
+			return &n.Kids[i * 2+1], nil
+		}
+	}
+	return nil, ErrNotExist
+}
 
-// 	node := n.Kids[i * 2 + 1]
-// 	val := node.Raw(n.JSON)
-// 	return Pair{key, newRawNodeUnsafe(val, node.Flag.IsEsc())}, nil
-// }
+// This will convert a token to Node
+//   - scalar type, directly slice original string
+//   - array/object, parse to Node for one layer
+//   - mut type, use unsafe.Pointer casting
+// TODO: handle mut token
+func (n *Node) sub(t types.Token) Node {
+	if t.Flag & _F_MUT == 0 {
+		return newRawNodeUnsafe(t.Raw(n.JSON), t.Flag.IsEsc())
+	} else {
+		panic("not implement!")
+	}
+}
 
-// func (n *Node) arrAt(i int) Node {
-// 	node := n.Kids[i * 2 + 1]
-// 	val := node.Raw(n.JSON)
-// 	return newRawNodeUnsafe(val, node.Flag.IsEsc())
-// }
+func (n *Node) arrAt(i int) *types.Token {
+	if i >= len(n.Kids) {
+		return nil
+	}
+	return &n.Kids[i]
+}
 
-
-// func strForToken(t types.Token, json string) (string, error) {
-// 	raw := t.Raw(json)
-// 	if !t.Flag.IsEsc(){
-// 		// remove the quotes
-// 		return raw[1: len(raw) - 1], nil
-// 	}
+func strForToken(t types.Token, json string) (string, error) {
+	raw := t.Raw(json)
+	if !t.Flag.IsEsc(){
+		// remove the quotes
+		return raw[1: len(raw) - 1], nil
+	}
 	
-// 	s, err := unquote(raw)
-// 	if err != 0 {
-// 		return "", makeSyntaxError(json, int(t.Off), err.Message())
-// 	} else {
-// 		return s, nil
-// 	}
-// }
+	s, err := unquote(raw)
+	if err != 0 {
+		return "", makeSyntaxError(json, int(t.Off), err.Message())
+	} else {
+		return s, nil
+	}
+}
 
 func makeSyntaxError(json string, p int, msg string) decoder.SyntaxError {
 	return decoder.SyntaxError{
@@ -62,8 +102,6 @@ func makeSyntaxError(json string, p int, msg string) decoder.SyntaxError {
 		Msg: msg,
 	}
 }
-
-
 
 // TODO: use flags to make, if is primitives
 func parseLazy(json string, path *[]interface{}) (Node, error) {
@@ -130,11 +168,9 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 
 // Note: not validate the input json, only used internal
 func newRawNodeUnsafe(json string, hasEsc bool) Node {
-	ret := Node{
-		Node: types.NewNode(json, hasEsc),
+	n := types.NewNode(json, hasEsc)
+	if !n.Kind.IsComplex() {
+		return Node{n, nil}
 	}
-	// if (ret.Kind == types.T_ARRAY || ret.Kind == types.T_OBJECT) && isRaw {
-	// 	ret.Flag |= _F_RAW
-	// }
-	return ret
+	return NewRaw(json)
 }
