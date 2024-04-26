@@ -1990,7 +1990,6 @@ static always_inline long skip_string_escaped(const GoString *src, long *p, bool
     return q;
 }
 
-
 static always_inline long parse_prmitives(const GoString *src, long *p, Node* node) {
     long i = *p - 1;
     char c = src->buf[i];
@@ -2098,39 +2097,42 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
         }
         xprintf("case 2 c is %c\n", c);
         xprintf("kind is  %p val is  %d\n", kind, *kind);
-
+ 
         // FIXME: the code is so ugly now...
         switch (c) {
             case 't': {
-                if (i + 3 >= src->len) {
-                    *p = i;
+                if (i + 2 >= src->len) {
                     return -ERR_EOF;
                 }
-                if (src->buf[i + 1] == 'r' && src->buf[i + 2] == 'u' && src->buf[i + 3] == 'e') {
+                if (src->buf[i] == 'r' && src->buf[i + 1] == 'u' && src->buf[i + 2] == 'e') {
                     visit_bool(kind, true);
                     *p = i + 4;
+                } else {
+                    return -ERR_INVAL;
                 }
                 break;
             }
             case 'f': {
-                if (i + 4 >= src->len) {
-                    *p = i;
+                if (i + 3 >= src->len) {
                     return -ERR_EOF;
                 }
-                if (src->buf[i + 1] == 'a' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 's' && src->buf[i + 4] == 'e') {
+                if (src->buf[i] == 'a' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 's' && src->buf[i + 3] == 'e') {
                     visit_bool(kind, false);
                     *p = i + 5;
+                } else {
+                    return -ERR_INVAL;
                 }
                 break;
             }
             case 'n': {
-                if (i + 3 >= src->len) {
-                    *p = i;
+                if (i + 2 >= src->len) {
                     return -ERR_EOF;
                 }
-                if (src->buf[i + 1] == 'u' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 'l') {
+                if (src->buf[i] == 'u' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 'l') {
                     visit_null(kind);
                     *p = i + 4;
+                } else {
+                    return -ERR_INVAL;
                 }
                 break;
             }
@@ -2213,11 +2215,6 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
         if (is_end) {
             break;
         }
-        // GoString gs =  {
-        //     .buf = src->buf + *p,
-        //     .len = src->len - *p
-        // };
-        // xprintf("remain3 is %g\n", &gs);
 
         // next token
         i = *p;
