@@ -823,3 +823,45 @@ func BenchmarkNodesGetByPath_NewNode(b *testing.B) {
         }
     })
 }
+
+func getSample(width int, depth int) string {
+	obj := map[string]interface{}{}
+	for i := 0; i < width; i++ {
+		var v  interface{}
+		if depth > 0 {
+			v = json.RawMessage(getSample(width/2+1, depth-1))
+		} else {
+			v = 1
+		}
+		obj[strconv.Itoa(i)] = v
+	}
+	js, _ := json.Marshal(obj)
+	return string(js)
+}
+
+func BenchmarkValue_GetByPath(b *testing.B) {
+    b.Run("10/2", func(b *testing.B) {
+        src := getSample(10, 0)
+        n := NewValueJSON(src)
+        b.ResetTimer()
+        for i:=0; i<b.N; i++ {
+           _ = n.GetByPath("5")
+        }
+    })
+    b.Run("100/2", func(b *testing.B) {
+        src := getSample(100, 0)
+        n := NewValueJSON(src)
+        b.ResetTimer()
+        for i:=0; i<b.N; i++ {
+           _ = n.GetByPath("50")
+        }
+    })
+    b.Run("1000/2", func(b *testing.B) {
+        src := getSample(1000, 0)
+        n := NewValueJSON(src)
+        b.ResetTimer()
+        for i:=0; i<b.N; i++ {
+           _ = n.GetByPath("500")
+        }
+    })
+}
