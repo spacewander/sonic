@@ -2106,7 +2106,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                 }
                 if (src->buf[i] == 'r' && src->buf[i + 1] == 'u' && src->buf[i + 2] == 'e') {
                     visit_bool(kind, true);
-                    *p = i + 4;
+                    *p = i + 3;
                 } else {
                     return -ERR_INVAL;
                 }
@@ -2118,7 +2118,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                 }
                 if (src->buf[i] == 'a' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 's' && src->buf[i + 3] == 'e') {
                     visit_bool(kind, false);
-                    *p = i + 5;
+                    *p = i + 4;
                 } else {
                     return -ERR_INVAL;
                 }
@@ -2130,7 +2130,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                 }
                 if (src->buf[i] == 'u' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 'l') {
                     visit_null(kind);
-                    *p = i + 4;
+                    *p = i + 3;
                 } else {
                     return -ERR_INVAL;
                 }
@@ -2205,6 +2205,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
             case '}': case ']': {
                 is_end = true;
                 node->tape.len = kcnt;
+                xprintf("len is %d", kcnt);
                 break;
             }
             default: {

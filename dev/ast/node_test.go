@@ -24,10 +24,25 @@ func getSample(width int, depth int) string {
 	return string(js)
 }
 
+
 func TestNodeParse(t *testing.T) {
-	n1, err := NewParser(`[1,"1",true]`).Parse()
+	n1, err := NewParser(`[1,"1",true,null]`).Parse()
+	require.NoError(t, err)
+	require.Equal(t, len(n1.Kids), 4)
+
+	n1, err = NewParser(`[]`).Parse()
+	require.NoError(t, err)
+	require.Equal(t, len(n1.Kids), 0)
+
+	n1, err = NewParser(`{}`).Parse()
+	require.NoError(t, err)
+	require.Equal(t, len(n1.Kids), 0)
+
+	n1, err = NewParser(`{"key": null, "k2": {}}`).Parse()
 	require.NoError(t, err)
 	spew.Dump(n1.Kids, len(n1.Kids))
+	require.Equal(t, len(n1.Kids), 4)
+
 	src := getSample(100, 0)
 	n, err := NewParser(src).Parse()
 	require.NoError(t, err)
