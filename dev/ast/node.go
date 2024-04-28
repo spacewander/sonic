@@ -198,7 +198,16 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 
 /***************** Cast APIs ***********************/
 
+func (n *Node) Int64() (int64, error) {
+	if err := n.should(types.T_NUMBER); err != nil {
+		return 0, err
+	}
+	return n.toInt64()
+}
 
+func (n *Node) toInt64() (int64, error) {
+	return json.Number(n.JSON).Int64()
+}
 
 
 /***************** Set APIs ***********************/

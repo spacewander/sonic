@@ -27,20 +27,50 @@ func getSample(width int, depth int) string {
 func TestNodeParse(t *testing.T) {
 	n1, err := NewParser(`[1,"1",true]`).Parse()
 	require.NoError(t, err)
-	spew.Dump(n1.Kids)
+	spew.Dump(n1.Kids, len(n1.Kids))
 	src := getSample(100, 0)
 	n, err := NewParser(src).Parse()
 	require.NoError(t, err)
+	n50 := n.GetByPath("50")
+	require.Empty(t, n50.Error())
+	v, _ := n50.Int64()
+	require.Equal(t, int64(1), v)
 	js, err := n.MarshalJSON()
 	require.NoError(t, err)
 	require.Equal(t, src, string(js))
 	src = getSample(100, 1)
 	n, err = NewParser(src).Parse()
-	spew.Dump(n.Kids)
 	require.NoError(t, err)
 	js, err = n.MarshalJSON()
 	require.NoError(t, err)
 	require.Equal(t, src, string(js))
+}
+
+func BenchmarkNode_GetByPath(b *testing.B) {
+	b.Run("10/2", func(b *testing.B) {
+		src := getSample(10, 0)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i:=0; i< b.N; i++ {
+			_ = n.GetByPath("5")
+		}
+	})
+	b.Run("100/2", func(b *testing.B) {
+		src := getSample(100, 0)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i:=0; i< b.N; i++ {
+			_ = n.GetByPath("50")
+		}
+	})
+	b.Run("1000/2", func(b *testing.B) {
+		src := getSample(1000, 0)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i:=0; i< b.N; i++ {
+			_ = n.GetByPath("500")
+		}
+	})
 }
 
 func BenchmarkParse(b *testing.B) {
