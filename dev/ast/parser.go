@@ -56,6 +56,9 @@ func (self *Parser) skip(path ...interface{}) (int, error) {
     types.FreeStateMachine(fsm)
     runtime.KeepAlive(path)
     if start < 0 {
+        if -start == int(types.ERR_NOT_FOUND) {
+            return -1, ErrNotExist
+        }
         return self.pos, makeSyntaxError(self.src, self.pos, types.ParsingError(-start).Message())
     }
     return start, nil

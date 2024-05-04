@@ -14,8 +14,7 @@ type Node struct {
 	mut []unsafe.Pointer // (nil)
 }
 
-
-func (n *Node) arrSet(i int, typ types.Type, val unsafe.Pointer) error {
+func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointer) error {
 	t := n.arrAt(i)
 	if t == nil {
 		return ErrNotExist
@@ -23,7 +22,7 @@ func (n *Node) arrSet(i int, typ types.Type, val unsafe.Pointer) error {
 	l := len(n.mut)
 	*t = types.Token{
 		Kind: typ,
-		Flag: _F_MUT,
+		Flag: _F_MUT | flag,
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
@@ -31,7 +30,7 @@ func (n *Node) arrSet(i int, typ types.Type, val unsafe.Pointer) error {
 	return nil
 }
 
-func (n *Node) objSet(key string, typ types.Type, val unsafe.Pointer) error {
+func (n *Node) objSet(key string, typ types.Type, flag types.Flag, val unsafe.Pointer) error {
 	t, err := n.objAt(key)
 	if err != nil {
 		return err
@@ -39,11 +38,33 @@ func (n *Node) objSet(key string, typ types.Type, val unsafe.Pointer) error {
 	l := len(n.mut)
 	*t = types.Token{
 		Kind: typ,
-		Flag: _F_MUT,
+		Flag: _F_MUT | flag,
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
 	n.Flag |= _F_MUT
+	return nil
+}
+
+func (n *Node) objAdd(key string, typ types.Type, flag types.Flag, val unsafe.Pointer) error {
+	l := len(n.mut)
+	k := types.Token{
+		Kind: types.T_STRING,
+		Flag: _F_KEY,
+		Off: uint32(l),
+	}
+	v := types.Token{
+		Kind: typ,
+		Flag: _F_MUT | flag,
+		Off: uint32(l+1),
+	}
+
+	n.mut = append(n.mut, unsafe.Pointer(&key))
+	n.mut = append(n.mut, val)
+	n.Flag |= _F_MUT
+	
+	n.Node.Kids = append(n.Node.Kids, k)
+	n.Node.Kids = append(n.Node.Kids, v)
 	return nil
 }
 

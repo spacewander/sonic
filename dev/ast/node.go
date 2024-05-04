@@ -2,6 +2,8 @@ package ast
 
 import (
 	"encoding/json"
+	"strings"
+	"unsafe"
 
 	"github.com/bytedance/sonic/encoder"
 	"github.com/bytedance/sonic/internal/native/types"
@@ -56,8 +58,9 @@ func (self *Node) Check() error {
 // }
 
 const (
-	_F_MUT = types.Flag(1<<2)
-	// _F_RAW = types.Flag(1<<1)
+	_F_MUT = types.Flag(1<<2) // mutated
+	_F_RAW = types.Flag(1<<1) // raw json
+	_F_KEY = types.Flag(1<<1) // string
 )
 
 
@@ -158,7 +161,20 @@ func (self *Node) should(t types.Type) error {
     return nil
 }
 
-func (n *Node) get(key string) (Node)  {
+func (self *Node) should2(t1 types.Type, t2 types.Type) error {
+    if err := self.Error(); err != "" {
+        return self
+    }
+    if  self.Kind != t2 && self.Kind != t2 {
+        return ErrUnsupportType
+    }
+    return nil
+}
+
+func (n *Node) get(key string) Node  {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return newError(err)
+	}
 	t, err := n.objAt(key)
 	if err != nil {
 		return newError(err)
@@ -166,7 +182,10 @@ func (n *Node) get(key string) (Node)  {
 	return n.sub(*t)
 }
 
-func (n *Node) index(key int) (Node)  {
+func (n *Node) index(key int) Node  {
+	if err := n.should(types.T_ARRAY); err != nil {
+		return newError(err)
+	}
 	t := n.arrAt(key)
 	if t == nil {
 		return emptyNode
@@ -193,6 +212,41 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 			return newError(err)
 		}
 		return n
+	}
+}
+
+func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
+	if l := len(path); l == 0 {
+		*self = val
+		return true, nil
+	} else if l == 1 {
+		switch p := path[0].(type) {
+		case int:
+			e := self.arrSet(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+			return e == nil, e 
+		case string:
+			e := self.objSet(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+			if e == ErrNotExist {
+				ee := self.objAdd(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+				return false, ee
+			} 
+			return e == nil, e
+		default:
+			panic("path must be either int or string")
+		}
+	} else {
+		parser := NewParser(self.JSON)
+		start, err := parser.skip(path...)
+		if err == ErrNotExist {
+			// todo: make JSON and insert
+		} else if err != nil {
+			return false, err
+		}
+		sb := make([]byte, 0, start+len(val.JSON)+(len(self.JSON)-parser.pos))
+		sb = append(sb, self.JSON[:start]...)
+		sb = append(sb, val.JSON...)
+		sb = append(sb, self.JSON[parser.pos:]...)
+		return true, nil
 	}
 }
 
