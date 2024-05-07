@@ -2,10 +2,10 @@ package ast
 
 import (
 	"encoding/json"
-	"strings"
 	"unsafe"
 
 	"github.com/bytedance/sonic/encoder"
+	"github.com/bytedance/sonic/internal/encoder/alg"
 	"github.com/bytedance/sonic/internal/native/types"
 	"github.com/bytedance/sonic/internal/rt"
 )
@@ -235,19 +235,90 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 			panic("path must be either int or string")
 		}
 	} else {
-		parser := NewParser(self.JSON)
-		start, err := parser.skip(path...)
+		p := NewParser(self.JSON)
+		var err error
+		var idx int
+		var start int
+
+		for i, k := range path {
+			if id, ok := k.(int); ok {
+				if start, err = p.searchIndex(id); err != nil {
+					return false, err
+				}
+			} else if key, ok := k.(string); ok {
+				if start, err = p.searchKey(key); err != nil {
+					if err != ErrNotExist {
+						return false, err
+					} else {
+						idx = i
+						break
+					}
+				}
+			} else {
+				panic("path must be either int or string")
+			}
+		}
 		if err == ErrNotExist {
-			// todo: make JSON and insert
+			s := p.pos - 1
+			for ; s >= 0 && isSpace(self.JSON[s]); s-- {
+			}
+			empty := (self.JSON[s] == '[' || self.JSON[s] == '{')
+			size := len(self.JSON) + len(val.JSON) + 8*(len(path))
+			b := make([]byte, 0, size)
+			s = s + 1
+			b = append(b, self.JSON[:s]...)
+			if !empty {
+				b = append(b, ","...)
+			}
+			// creat new nodes on path
+			var err error
+			b, err = makePathAndValue(b, path[idx:], false, val)
+			return false, err
 		} else if err != nil {
 			return false, err
+		} else {
+			sb := make([]byte, 0, start+len(val.JSON)+(len(self.JSON)-parser.pos))
+			sb = append(sb, self.JSON[:start]...)
+			sb = append(sb, val.JSON...)
+			sb = append(sb, self.JSON[parser.pos:]...)
+			return true, nil
 		}
-		sb := make([]byte, 0, start+len(val.JSON)+(len(self.JSON)-parser.pos))
-		sb = append(sb, self.JSON[:start]...)
-		sb = append(sb, val.JSON...)
-		sb = append(sb, self.JSON[parser.pos:]...)
-		return true, nil
 	}
+}
+
+// [2,"a"],1 => {"a":1}
+// ["a",2],1  => "a":[1]
+func makePathAndValue(b []byte, path []interface{}, allowAppend bool, val Node) ([]byte, error) {
+	for i, k := range path {
+		if key, ok := k.(string); ok {
+			b = alg.Quote(b, key, false)
+			b = append(b, ":"...)
+		}
+		if i == len(path)-1 {
+			b = append(b, val.JSON...)
+			break
+		}
+		n := path[i+1]
+		if _, ok := n.(int); ok {
+			if !allowAppend {
+				return nil, ErrOutOfRange
+			}
+			b = append(b, "["...)
+		} else if _, ok := n.(string); ok {
+			b = append(b, `{`...)
+		} else {
+			panic("path must be either int or string")
+		}
+	}
+	for i := len(path) - 1; i >= 1; i-- {
+		k := path[i]
+		if _, ok := k.(int); ok {
+			b = append(b, "]"...)
+		} else if _, ok := k.(string); ok {
+			b = append(b, `}`...)
+		}
+	}
+	return b, nil
 }
 
 /***************** Cast APIs ***********************/

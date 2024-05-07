@@ -14,7 +14,9 @@ var (
     emptyNode = newError(errors.New("not exist"))
 
     // ErrUnsupportType means API on the node is unsupported
-    ErrUnsupportType error = newError(errors.New("not exist"))
+    ErrUnsupportType error = newError(errors.New("not supported type"))
+
+    ErrOutOfRange error = newError(errors.New("index out of range"))
 )
 
 func newError(err error) Node {

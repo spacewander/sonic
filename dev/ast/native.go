@@ -17,7 +17,7 @@ type Node struct {
 func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointer) error {
 	t := n.arrAt(i)
 	if t == nil {
-		return ErrNotExist
+		return ErrOutOfRange
 	}
 	l := len(n.mut)
 	*t = types.Token{
