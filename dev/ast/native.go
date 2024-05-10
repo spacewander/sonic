@@ -29,7 +29,7 @@ func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointe
 	return nil
 }
 
-func (n *Node) arrAdd( typ types.Type, flag types.Flag, val unsafe.Pointer) error {
+func (n *Node) arrAdd(typ types.Type, flag types.Flag, val unsafe.Pointer) error {
 	l := len(n.mut)
 	v := types.Token{
 		Kind: typ,
@@ -44,8 +44,29 @@ func (n *Node) arrAdd( typ types.Type, flag types.Flag, val unsafe.Pointer) erro
 	return nil
 }
 
+func (n *Node) arrDel(i int) error {
+	t := n.arrAt(i)
+	if t == nil {
+		return ErrNotExist
+	}
+	var right []types.Token
+	if i < len(n.node.Kids) - 1 {
+		right = n.node.Kids[i+1:]
+	}
+	n.node.Kids = append(n.node.Kids[:i], right...)
+	if t.Flag & _F_MUT != 0 {
+		x := int(t.Off)
+		var right []unsafe.Pointer
+		if x < len(n.mut) - 1 {
+			right = n.mut[x+1:]
+		}
+		n.mut = append(n.mut[:x], right...)
+	}
+	return nil
+}
+
 func (n *Node) objSet(key string, typ types.Type, flag types.Flag, val unsafe.Pointer) error {
-	t, err := n.objAt(key)
+	_, t, err := n.objAt(key)
 	if err != nil {
 		return err
 	}
@@ -82,17 +103,41 @@ func (n *Node) objAdd(key string, typ types.Type, flag types.Flag, val unsafe.Po
 	return nil
 }
 
-func (n *Node) objAt(key string) (*types.Token, error)  {
-	for i := 0; i<len(n.node.Kids)/2; i++ {
-		k, err := n.str(n.node.Kids[i * 2])
+func (n *Node) objAt(key string) (int, *types.Token, error)  {
+	for i := 0; i<len(n.node.Kids); i+=2 {
+		k, err := n.str(n.node.Kids[i])
 		if err != nil {
-			return nil, err
+			return -1, nil, err
 		}
 		if k == key {
-			return &n.node.Kids[i * 2+1], nil
+			return i, &n.node.Kids[i+1], nil
 		}
 	}
-	return nil, ErrNotExist
+	return -1, nil, ErrNotExist
+}
+
+func (n *Node) objDel(key string) error {
+	i, t, err := n.objAt(key)
+	if err != nil {
+		return err
+	}
+	if t == nil {
+		return ErrNotExist
+	}
+	var right []types.Token
+	if i < len(n.node.Kids) - 2 {
+		right = n.node.Kids[i+2:]
+	}
+	n.node.Kids = append(n.node.Kids[:i], right...)
+	if t.Flag & _F_MUT != 0 {
+		x := int(t.Off)
+		var right []unsafe.Pointer
+		if x < len(n.mut) - 2 {
+			right = n.mut[x+2:]
+		}
+		n.mut = append(n.mut[:x], right...)
+	}
+	return nil
 }
 
 // This will convert a token to Node

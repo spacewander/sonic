@@ -161,7 +161,7 @@ func (n *Node) get(key string) Node  {
 	if err := n.should(types.T_OBJECT); err != nil {
 		return newError(err)
 	}
-	t, err := n.objAt(key)
+	_, t, err := n.objAt(key)
 	if err != nil {
 		return newError(err)
 	}
@@ -539,4 +539,67 @@ func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}
 	}
 }
 
-func 
+func (self *Node) UnsetByPath(path ...interface{}) (bool, error) {
+	if l := len(path); l == 0 {
+		*self = Node{}
+		return true, nil
+	} else if l == 1 {
+		// for one layer set
+		switch p := path[0].(type) {
+		case int:
+			e := self.arrDel(p)
+			return e != ErrNotExist, e 
+		case string:
+			e := self.objDel(p)
+			return e != ErrNotExist, e 
+		default:
+			panic("path must be either int or string")
+		}
+	} else {
+		// multi layers set
+		p := NewParser(self.node.JSON)
+		var err types.ParsingError
+		var start int
+		for _, k := range path {
+			if id, ok := k.(int); ok {
+				if start, err = p.locate(id); err != 0 {
+					if err == types.ERR_NOT_FOUND {
+						return false, nil
+					} else {
+						return true, makeSyntaxError(self.node.JSON, p.pos, err.Message())
+					}
+				}
+			} else if key, ok := k.(string); ok {
+				if start, err = p.locate(key); err != 0 {
+					if err == types.ERR_NOT_FOUND {
+						return false, nil
+					} else {
+						return true, makeSyntaxError(self.node.JSON, p.pos, err.Message())
+					}
+				}
+			} else {
+				panic("path must be either int or string")
+			}
+		}
+
+		for ; start >= 0 && isSpace(self.node.JSON[start]); start-- {
+		}
+		if (self.node.JSON[start] != ',') {
+			start = start - 1 // NOTICE: first elem doesn't need to delete left ','
+		}
+		var b []byte
+		b = make([]byte, 0, len(self.node.JSON) - (p.pos-start))
+		b = append(b, self.node.JSON[:start]...)
+		b = append(b, self.node.JSON[p.pos:]...)
+
+		// refrest the node
+		p.src = rt.Mem2Str(b)
+		p.pos = 0
+		node, ee := p.Parse()
+		if ee != nil {
+			return true, ee
+		}
+		*self = node
+		return true, nil
+	}
+}
