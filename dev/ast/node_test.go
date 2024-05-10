@@ -12,7 +12,7 @@ import (
 func getSample(width int, depth int) string {
 	obj := map[string]interface{}{}
 	for i := 0; i < width; i++ {
-		var v  interface{}
+		var v interface{}
 		if depth > 0 {
 			v = json.RawMessage(getSample(width/2+1, depth-1))
 		} else {
@@ -24,24 +24,23 @@ func getSample(width int, depth int) string {
 	return string(js)
 }
 
-
 func TestNodeParse(t *testing.T) {
 	n1, err := NewParser(`[1,"1",true,null]`).Parse()
 	require.NoError(t, err)
-	require.Equal(t, len(n1.Kids), 4)
+	require.Equal(t, len(n1.node.Kids), 4)
 
 	n1, err = NewParser(`[]`).Parse()
 	require.NoError(t, err)
-	require.Equal(t, len(n1.Kids), 0)
+	require.Equal(t, len(n1.node.Kids), 0)
 
 	n1, err = NewParser(`{}`).Parse()
 	require.NoError(t, err)
-	require.Equal(t, len(n1.Kids), 0)
+	require.Equal(t, len(n1.node.Kids), 0)
 
 	n1, err = NewParser(`{"key": null, "k2": {}}`).Parse()
 	require.NoError(t, err)
-	spew.Dump(n1.Kids, len(n1.Kids))
-	require.Equal(t, len(n1.Kids), 4)
+	spew.Dump(n1.node.Kids, len(n1.node.Kids))
+	require.Equal(t, len(n1.node.Kids), 4)
 
 	src := getSample(100, 0)
 	n, err := NewParser(src).Parse()
@@ -66,7 +65,7 @@ func BenchmarkNode_GetByPath(b *testing.B) {
 		src := getSample(10, 0)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("5")
 		}
 	})
@@ -74,7 +73,7 @@ func BenchmarkNode_GetByPath(b *testing.B) {
 		src := getSample(100, 0)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("50")
 		}
 	})
@@ -82,7 +81,7 @@ func BenchmarkNode_GetByPath(b *testing.B) {
 		src := getSample(1000, 0)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("500")
 		}
 	})
@@ -92,44 +91,43 @@ func BenchmarkParse(b *testing.B) {
 	b.Run("10-0", func(b *testing.B) {
 		src := getSample(10, 0)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 	b.Run("10-1", func(b *testing.B) {
 		src := getSample(10, 1)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 	b.Run("100-0", func(b *testing.B) {
 		src := getSample(100, 0)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 	b.Run("100-1", func(b *testing.B) {
 		src := getSample(100, 1)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 	b.Run("1000-0", func(b *testing.B) {
 		src := getSample(1000, 0)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 	b.Run("1000-1", func(b *testing.B) {
 		src := getSample(1000, 1)
 		b.ResetTimer()
-		for i:=0; i< b.N; i++ {
+		for i := 0; i < b.N; i++ {
 			_, _ = NewParser(src).Parse()
 		}
 	})
 }
-

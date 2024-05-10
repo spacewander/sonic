@@ -29,7 +29,7 @@ type Pair struct {
 
 // Exists returns false only if the self is nil or empty node V_NONE
 func (self *Node) Exists() bool {
-	return self.Valid() && self.Kind != _V_NONE
+	return self.Valid() && self.node.Kind != _V_NONE
 }
 
 // Valid reports if self is NOT V_ERROR or nil
@@ -37,7 +37,7 @@ func (self *Node) Valid() bool {
 	if self == nil {
 		return false
 	}
-	return self.Kind != _V_ERROR
+	return self.node.Kind != _V_ERROR
 }
 
 // Check checks if the node itself is valid, and return:
@@ -46,7 +46,7 @@ func (self *Node) Valid() bool {
 func (self *Node) Check() error {
 	if self == nil {
 		return ErrNotExist
-	} else if self.Kind == _V_ERROR {
+	} else if self.node.Kind == _V_ERROR {
 		return self
 	} else {
 		return nil
@@ -155,7 +155,7 @@ func (self *Node) should(t types.Type) error {
     if err := self.Error(); err != "" {
         return self
     }
-    if  self.Kind != t {
+    if  self.node.Kind != t {
         return ErrUnsupportType
     }
     return nil
@@ -165,7 +165,7 @@ func (self *Node) should2(t1 types.Type, t2 types.Type) error {
     if err := self.Error(); err != "" {
         return self
     }
-    if  self.Kind != t2 && self.Kind != t2 {
+    if  self.node.Kind != t1 && self.node.Kind != t2 {
         return ErrUnsupportType
     }
     return nil
@@ -207,7 +207,7 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 			panic("path must be either int or string")
 		}
 	} else {
-		n, err := NewParser(self.JSON).getByPath(path...)
+		n, err := NewParser(self.node.JSON).GetByPath(path...)
 		if err != nil {
 			return newError(err)
 		}
@@ -220,14 +220,15 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 		*self = val
 		return true, nil
 	} else if l == 1 {
+		// for one layer set
 		switch p := path[0].(type) {
 		case int:
-			e := self.arrSet(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+			e := self.arrSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
 			return e == nil, e 
 		case string:
-			e := self.objSet(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+			e := self.objSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
 			if e == ErrNotExist {
-				ee := self.objAdd(p, val.Kind, _F_RAW, unsafe.Pointer(&val.JSON))
+				ee := self.objAdd(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
 				return false, ee
 			} 
 			return e == nil, e
@@ -235,20 +236,21 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 			panic("path must be either int or string")
 		}
 	} else {
-		p := NewParser(self.JSON)
-		var err error
+		// multi layers set
+		p := NewParser(self.node.JSON)
+		var err types.ParsingError
 		var idx int
 		var start int
-
 		for i, k := range path {
 			if id, ok := k.(int); ok {
-				if start, err = p.searchIndex(id); err != nil {
-					return false, err
+				if start, err = p.locate(id); err != 0 {
+					return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 				}
 			} else if key, ok := k.(string); ok {
-				if start, err = p.searchKey(key); err != nil {
-					if err != ErrNotExist {
-						return false, err
+				if start, err = p.locate(key); err != 0 {
+					// for object, we allow insert non-exist key
+					if err != types.ERR_NOT_FOUND {
+						return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 					} else {
 						idx = i
 						break
@@ -258,31 +260,42 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 				panic("path must be either int or string")
 			}
 		}
-		if err == ErrNotExist {
+		var b []byte
+		if err == types.ERR_NOT_FOUND {
 			s := p.pos - 1
-			for ; s >= 0 && isSpace(self.JSON[s]); s-- {
+			for ; s >= 0 && isSpace(self.node.JSON[s]); s-- {
 			}
-			empty := (self.JSON[s] == '[' || self.JSON[s] == '{')
-			size := len(self.JSON) + len(val.JSON) + 8*(len(path))
-			b := make([]byte, 0, size)
+			empty := (self.node.JSON[s] == '[' || self.node.JSON[s] == '{')
+			size := len(self.node.JSON) + len(val.node.JSON) + 8*(len(path))
+			b = make([]byte, 0, size)
 			s = s + 1
-			b = append(b, self.JSON[:s]...)
+			b = append(b, self.node.JSON[:s]...)
 			if !empty {
 				b = append(b, ","...)
 			}
 			// creat new nodes on path
 			var err error
 			b, err = makePathAndValue(b, path[idx:], false, val)
-			return false, err
-		} else if err != nil {
-			return false, err
+			if err != nil {
+				return true, err
+			}
+		} else if err != 0 {
+			return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 		} else {
-			sb := make([]byte, 0, start+len(val.JSON)+(len(self.JSON)-parser.pos))
-			sb = append(sb, self.JSON[:start]...)
-			sb = append(sb, val.JSON...)
-			sb = append(sb, self.JSON[parser.pos:]...)
-			return true, nil
+			b = make([]byte, 0, start+len(val.node.JSON)+(len(self.node.JSON)-p.pos))
+			b = append(b, self.node.JSON[:start]...)
+			b = append(b, val.node.JSON...)
+			b = append(b, self.node.JSON[p.pos:]...)
 		}
+		// refrest the node
+		p.src = rt.Mem2Str(b)
+		p.pos = 0
+		node, ee := p.Parse()
+		if ee != nil {
+			return true, ee
+		}
+		*self = node
+		return true, nil
 	}
 }
 
@@ -295,7 +308,7 @@ func makePathAndValue(b []byte, path []interface{}, allowAppend bool, val Node) 
 			b = append(b, ":"...)
 		}
 		if i == len(path)-1 {
-			b = append(b, val.JSON...)
+			b = append(b, val.node.JSON...)
 			break
 		}
 		n := path[i+1]
@@ -331,7 +344,7 @@ func (n *Node) Int64() (int64, error) {
 }
 
 func (n *Node) toInt64() (int64, error) {
-	return json.Number(n.JSON).Int64()
+	return json.Number(n.node.JSON).Int64()
 }
 
 

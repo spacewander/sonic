@@ -21,7 +21,7 @@ var (
 
 func newError(err error) Node {
     return Node{
-        Node: types.Node{
+        node: types.Node{
             Kind: _V_ERROR,
             JSON: err.Error(),
         },
@@ -30,9 +30,9 @@ func newError(err error) Node {
 
 // Error returns error message if the node is invalid
 func (self Node) Error() string {
-    if self.Kind != _V_ERROR {
+    if self.node.Kind != _V_ERROR {
         return ""
     } else {
-		return self.JSON
+		return self.node.JSON
     } 
 }

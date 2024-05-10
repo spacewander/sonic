@@ -10,7 +10,7 @@ import (
 
 // a internal node parsed from native C.
 type Node struct {
-	types.Node
+	node types.Node
 	mut []unsafe.Pointer // (nil)
 }
 
@@ -26,7 +26,7 @@ func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointe
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
-	n.Flag |= _F_MUT
+	n.node.Flag |= _F_MUT
 	return nil
 }
 
@@ -42,7 +42,7 @@ func (n *Node) objSet(key string, typ types.Type, flag types.Flag, val unsafe.Po
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
-	n.Flag |= _F_MUT
+	n.node.Flag |= _F_MUT
 	return nil
 }
 
@@ -61,21 +61,21 @@ func (n *Node) objAdd(key string, typ types.Type, flag types.Flag, val unsafe.Po
 
 	n.mut = append(n.mut, unsafe.Pointer(&key))
 	n.mut = append(n.mut, val)
-	n.Flag |= _F_MUT
+	n.node.Flag |= _F_MUT
 	
-	n.Node.Kids = append(n.Node.Kids, k)
-	n.Node.Kids = append(n.Node.Kids, v)
+	n.node.Kids = append(n.node.Kids, k)
+	n.node.Kids = append(n.node.Kids, v)
 	return nil
 }
 
 func (n *Node) objAt(key string) (*types.Token, error)  {
-	for i := 0; i<len(n.Kids)/2; i++ {
-		k, err := strForToken(n.Kids[i * 2], n.JSON)
+	for i := 0; i<len(n.node.Kids)/2; i++ {
+		k, err := strForToken(n.node.Kids[i * 2], n.node.JSON)
 		if err != nil {
 			return nil, err
 		}
 		if k == key {
-			return &n.Kids[i * 2+1], nil
+			return &n.node.Kids[i * 2+1], nil
 		}
 	}
 	return nil, ErrNotExist
@@ -88,17 +88,17 @@ func (n *Node) objAt(key string) (*types.Token, error)  {
 // TODO: handle mut token
 func (n *Node) sub(t types.Token) Node {
 	if t.Flag & _F_MUT == 0 {
-		return newRawNodeUnsafe(t.Raw(n.JSON), t.Flag.IsEsc())
+		return newRawNodeUnsafe(t.Raw(n.node.JSON), t.Flag.IsEsc())
 	} else {
 		panic("not implement!")
 	}
 }
 
 func (n *Node) arrAt(i int) *types.Token {
-	if i >= len(n.Kids) {
+	if i >= len(n.node.Kids) {
 		return nil
 	}
-	return &n.Kids[i]
+	return &n.node.Kids[i]
 }
 
 func strForToken(t types.Token, json string) (string, error) {
@@ -128,15 +128,15 @@ func makeSyntaxError(json string, p int, msg string) decoder.SyntaxError {
 func parseLazy(json string, path *[]interface{}) (Node, error) {
 	// TODO: got real PC of biz caller
 	node := Node{}
-	node.Node.Kids = make([]types.Token, 0, types.PredictTokenSize())
+	node.node.Kids = make([]types.Token, 0, types.PredictTokenSize())
 
 	/* parse into inner node */
 	r, p := 0, 0
 	for {
 		p = 0
-		r = native.ParseLazy(&json, &p, &node.Node, path)
+		r = native.ParseLazy(&json, &p, &node.node, path)
 		if r == -types.MUST_RETRY {
-			node.Node.Grow()
+			node.node.Grow()
 		} else {
 			break
 		}
@@ -147,8 +147,8 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 		return Node{},  makeSyntaxError(json, p, types.ParsingError(-r).Message())
 	}
 
-	node.JSON = json
-	types.RecordTokenSize(int64(len(node.Node.Kids)))
+	node.node.JSON = json
+	types.RecordTokenSize(int64(len(node.node.Kids)))
 	return node, nil
 
 	// // println("json xxx is ", json)
