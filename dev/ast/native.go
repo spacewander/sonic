@@ -3,7 +3,6 @@ package ast
 import (
 	"unsafe"
 
-	"github.com/bytedance/sonic/decoder"
 	"github.com/bytedance/sonic/internal/native"
 	"github.com/bytedance/sonic/internal/native/types"
 )
@@ -17,7 +16,7 @@ type Node struct {
 func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointer) error {
 	t := n.arrAt(i)
 	if t == nil {
-		return ErrOutOfRange
+		return ErrNotExist
 	}
 	l := len(n.mut)
 	*t = types.Token{
@@ -27,6 +26,21 @@ func (n *Node) arrSet(i int, typ types.Type, flag types.Flag,  val unsafe.Pointe
 	}
 	n.mut = append(n.mut, val)
 	n.node.Flag |= _F_MUT
+	return nil
+}
+
+func (n *Node) arrAdd( typ types.Type, flag types.Flag, val unsafe.Pointer) error {
+	l := len(n.mut)
+	v := types.Token{
+		Kind: typ,
+		Flag: _F_MUT | flag,
+		Off: uint32(l),
+	}
+
+	n.mut = append(n.mut, val)
+	n.node.Flag |= _F_MUT
+	
+	n.node.Kids = append(n.node.Kids, v)
 	return nil
 }
 
@@ -70,7 +84,7 @@ func (n *Node) objAdd(key string, typ types.Type, flag types.Flag, val unsafe.Po
 
 func (n *Node) objAt(key string) (*types.Token, error)  {
 	for i := 0; i<len(n.node.Kids)/2; i++ {
-		k, err := strForToken(n.node.Kids[i * 2], n.node.JSON)
+		k, err := n.str(n.node.Kids[i * 2])
 		if err != nil {
 			return nil, err
 		}
@@ -101,8 +115,12 @@ func (n *Node) arrAt(i int) *types.Token {
 	return &n.node.Kids[i]
 }
 
-func strForToken(t types.Token, json string) (string, error) {
-	raw := t.Raw(json)
+func (n *Node) json(t types.Token) string {
+	return t.Raw(n.node.JSON)
+}
+
+func (n *Node) str(t types.Token) (string, error) {
+	raw := n.json(t)
 	if !t.Flag.IsEsc(){
 		// remove the quotes
 		return raw[1: len(raw) - 1], nil
@@ -110,19 +128,12 @@ func strForToken(t types.Token, json string) (string, error) {
 	
 	s, err := unquote(raw)
 	if err != 0 {
-		return "", makeSyntaxError(json, int(t.Off), err.Message())
+		return "", makeSyntaxError(raw, int(t.Off), err.Message())
 	} else {
 		return s, nil
 	}
 }
 
-func makeSyntaxError(json string, p int, msg string) decoder.SyntaxError {
-	return decoder.SyntaxError{
-		Pos : p,
-		Src : json,
-		Msg: msg,
-	}
-}
 
 // TODO: use flags to make, if is primitives
 func parseLazy(json string, path *[]interface{}) (Node, error) {
@@ -147,7 +158,7 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 		return Node{},  makeSyntaxError(json, p, types.ParsingError(-r).Message())
 	}
 
-	node.node.JSON = json
+	node.node.JSON = json[r:p]
 	types.RecordTokenSize(int64(len(node.node.Kids)))
 	return node, nil
 

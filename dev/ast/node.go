@@ -4,21 +4,12 @@ import (
 	"encoding/json"
 	"unsafe"
 
+	"github.com/bytedance/sonic/decoder"
 	"github.com/bytedance/sonic/encoder"
-	"github.com/bytedance/sonic/internal/encoder/alg"
+	"github.com/bytedance/sonic/internal/native"
 	"github.com/bytedance/sonic/internal/native/types"
 	"github.com/bytedance/sonic/internal/rt"
 )
-
-// 0..4 bits for basic type
-const (
-	_V_NONE  = 0
-	_V_ERROR  = 0
-)
-
-type valueType uint8
-
-
 
 type Pair struct {
     Key   string
@@ -29,7 +20,7 @@ type Pair struct {
 
 // Exists returns false only if the self is nil or empty node V_NONE
 func (self *Node) Exists() bool {
-	return self.Valid() && self.node.Kind != _V_NONE
+	return self.Valid() && self.node.Kind != V_NONE
 }
 
 // Valid reports if self is NOT V_ERROR or nil
@@ -37,7 +28,7 @@ func (self *Node) Valid() bool {
 	if self == nil {
 		return false
 	}
-	return self.node.Kind != _V_ERROR
+	return self.node.Kind != V_ERROR
 }
 
 // Check checks if the node itself is valid, and return:
@@ -46,7 +37,7 @@ func (self *Node) Valid() bool {
 func (self *Node) Check() error {
 	if self == nil {
 		return ErrNotExist
-	} else if self.node.Kind == _V_ERROR {
+	} else if self.node.Kind == V_ERROR {
 		return self
 	} else {
 		return nil
@@ -126,7 +117,7 @@ func NewString(v string) Node {
 	return newRawNodeUnsafe(s, esc)
 }
 
-func NewInt(v int) Node {
+func NewInt64(v int64) Node {
 	s, err := encoder.Encode(v, 0)
 	if err != nil {
 		return newError(err)
@@ -193,6 +184,221 @@ func (n *Node) index(key int) Node  {
 	return n.sub(*t)
 }
 
+const (
+    V_NONE   = 0
+    V_ERROR  = 1
+    V_NULL   = int(types.T_NULL)
+    V_TRUE   = int(types.T_TRUE)
+    V_FALSE  = int(types.T_FALSE)
+    V_ARRAY  = int(types.T_ARRAY)
+    V_OBJECT = int(types.T_OBJECT)
+    V_STRING = int(types.T_STRING)
+    V_NUMBER = int(types.T_NUMBER)
+)
+
+// Type returns json type represented by the node
+// It will be one of belows:
+//
+//	V_NONE   = 0 (empty node)
+//	V_ERROR  = 1 (something wrong)
+//	V_NULL   = 2 (json value `null`)
+//	V_TRUE   = 3 (json value `true`)
+//	V_FALSE  = 4 (json value `false`)
+//	V_ARRAY  = 5 (json value array)
+//	V_OBJECT = 6 (json value object)
+//	V_STRING = 7 (json value string)
+//	V_NUMBER = 8 (json value number )
+func (self Node) Type() int {
+	return int(self.node.Kind)
+}
+
+func (n *Node) Raw() (string, error) {
+	if n.Error() != "" {
+		return "", n
+	}
+	return n.node.JSON, nil
+}
+
+func (n *Node) Bool() (bool, error) {
+	switch n.node.Kind {
+		case types.T_FALSE: return false, nil
+		case types.T_TRUE: return true, nil
+		default: return false, ErrUnsupportType
+	}
+}
+
+func (n *Node) Int64() (int64, error) {
+	if err := n.should(types.T_NUMBER); err != nil {
+		return 0, err
+	}
+	var st types.JsonState
+	e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
+	if e < 0 {
+		return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+	}
+	switch st.Vt {
+		case types.V_INTEGER: return st.Iv, nil
+		default: return 0, ErrUnsupportType
+	}
+}
+
+func (n *Node) Float64() (float64, error) {
+	if err := n.should(types.T_NUMBER); err != nil {
+		return 0, err
+	}
+	var st types.JsonState
+	e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
+	if e < 0 {
+		return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+	}
+	switch st.Vt {
+		case types.V_INTEGER: return float64(st.Iv), nil
+		case types.V_DOUBLE: return st.Dv, nil
+		default: return 0, ErrUnsupportType
+	}
+}
+
+func (n *Node) Number() (json.Number, error) {
+	if err := n.should(types.T_NUMBER); err != nil {
+		return "", err
+	}
+	return json.Number(n.node.JSON), nil
+}
+
+func (n *Node) String() (string, error) {
+	if err := n.should(types.T_STRING); err != nil {
+		return "", err
+	}
+	if !n.node.Flag.IsEsc() {
+		return n.node.JSON[1: len(n.node.JSON) - 1], nil
+	}
+	s, err := unquote(n.node.JSON)
+	if err != 0 {
+		return "", makeSyntaxError(n.node.JSON, 0, err.Message())
+	} else {
+		return s, nil
+	}
+}
+
+func (n *Node) Array(buf *[]Node) error {
+	if err := n.should(types.T_ARRAY); err != nil {
+		return err
+	}
+	l := len(n.node.Kids)
+	ol := len(*buf)
+	if cap(*buf) - ol < l {
+		tmp := make([]Node, ol+l)
+		copy(tmp, *buf)
+		*buf = tmp[:ol]
+	}
+	for _, t := range n.node.Kids {
+		*buf = append(*buf, n.sub(t))
+	}
+	return nil
+}
+
+func (n *Node) Map(buf map[string]Node) error {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return err
+	}
+	for i := 0; i<len(n.node.Kids);  {
+		t := n.node.Kids[i];
+		key, err := n.str(t)
+		if err != nil {
+			return err
+		}
+		tt := n.node.Kids[i+1]
+		val := n.sub(tt)
+		buf[key] = val
+		i += 2
+	}
+	return nil
+}
+
+func (n *Node) InterfaceUseNode() (interface{}, error) {
+	switch n.node.Kind {
+	case types.T_NULL:
+		return nil, nil
+	case types.T_FALSE:
+		return false, nil
+	case types.T_TRUE:
+		return true, nil
+	case types.T_STRING:
+		return n.String()
+	case types.T_NUMBER:
+		return n.Number()
+	case types.T_ARRAY:
+		buf := make([]Node, 0, len(n.node.Kids))
+		err := n.Array(&buf)
+		return buf, err
+	case types.T_OBJECT:
+		buf := make(map[string]Node, len(n.node.Kids)/2)
+		err := n.Map(buf)
+		return buf, err
+	case V_ERROR:
+		return nil, n
+	case V_NONE:
+		return nil, ErrNotExist
+	default:
+		return nil, ErrUnsupportType
+	}
+}
+
+func (n *Node) InterfaceUseGoPrimitive(opts decoder.Options) (interface{}, error) {
+	switch n.node.Kind {
+	case types.T_NULL:
+		return nil, nil
+	case types.T_FALSE:
+		return false, nil
+	case types.T_TRUE:
+		return true, nil
+	case types.T_STRING:
+		return n.String()
+	case types.T_NUMBER:
+		if opts & decoder.OptionUseNumber != 0 {
+			return json.Number(n.node.JSON), nil
+		} else if opts & decoder.OptionUseInt64 != 0 {
+			if iv, err := n.Int64(); err == nil {
+				return iv, nil
+			}
+		}
+		return n.Float64()
+	case types.T_ARRAY:
+		buf := make([]interface{}, 0, len(n.node.Kids))
+		for i, tok := range n.node.Kids {
+			js := tok.Raw(n.node.JSON)
+			dc := decoder.NewDecoder(js)
+			dc.SetOptions(opts)
+			if err := dc.Decode(&buf[i]); err != nil {
+				return nil, err
+			}
+		}
+		return buf, nil
+	case types.T_OBJECT:
+		buf := make(map[string]interface{}, len(n.node.Kids)/2)
+		for i:=0; i<len(n.node.Kids); i += 2 {
+			key, err := n.str(n.node.Kids[i])
+			if err != nil {
+				return nil, err
+			}
+			var val interface{}
+			js := n.node.Kids[i+1].Raw(n.node.JSON)
+			dc := decoder.NewDecoder(js)
+			dc.SetOptions(opts)
+			if err := dc.Decode(&val); err != nil {
+				return nil, err
+			}
+			buf[key] = val
+		}
+		return buf, nil
+	case V_ERROR:
+		return nil, n
+	case V_NONE:
+		return nil, ErrNotExist
+	default:
+		return nil, ErrUnsupportType
+	}
+}
 
 func (self *Node) GetByPath(path ...interface{}) Node {
 	if l := len(path); l == 0 {
@@ -215,7 +421,9 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 	}
 }
 
-func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
+var EstimatedInsertedPathCharSize = 8
+
+func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}) (bool, error) {
 	if l := len(path); l == 0 {
 		*self = val
 		return true, nil
@@ -224,6 +432,10 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 		switch p := path[0].(type) {
 		case int:
 			e := self.arrSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+			if e == ErrNotExist && allowArrayAppend {
+				ee := self.arrAdd(val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+				return false, ee
+			}
 			return e == nil, e 
 		case string:
 			e := self.objSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
@@ -239,12 +451,17 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 		// multi layers set
 		p := NewParser(self.node.JSON)
 		var err types.ParsingError
-		var idx int
+		var missing int
 		var start int
 		for i, k := range path {
 			if id, ok := k.(int); ok {
 				if start, err = p.locate(id); err != 0 {
-					return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
+					if err != types.ERR_NOT_FOUND {
+						return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
+					} else {
+						missing = i
+						break
+					}
 				}
 			} else if key, ok := k.(string); ok {
 				if start, err = p.locate(key); err != 0 {
@@ -252,7 +469,7 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 					if err != types.ERR_NOT_FOUND {
 						return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 					} else {
-						idx = i
+						missing = i
 						break
 					}
 				}
@@ -262,20 +479,18 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 		}
 		var b []byte
 		if err == types.ERR_NOT_FOUND {
-			s := p.pos - 1
-			for ; s >= 0 && isSpace(self.node.JSON[s]); s-- {
-			}
-			empty := (self.node.JSON[s] == '[' || self.node.JSON[s] == '{')
-			size := len(self.node.JSON) + len(val.node.JSON) + 8*(len(path))
+			// NOTICE: pos must stop at '}' or ']'
+			s, empty := backward(self.node.JSON, p.pos)
+			path := path[missing:]
+			size := len(self.node.JSON) + len(val.node.JSON) + EstimatedInsertedPathCharSize*(len(path))
 			b = make([]byte, 0, size)
-			s = s + 1
 			b = append(b, self.node.JSON[:s]...)
 			if !empty {
 				b = append(b, ","...)
 			}
 			// creat new nodes on path
 			var err error
-			b, err = makePathAndValue(b, path[idx:], false, val)
+			b, err = makePathAndValue(b, path, allowArrayAppend, val)
 			if err != nil {
 				return true, err
 			}
@@ -298,54 +513,3 @@ func (self *Node) SetByPath(val Node, path ...interface{}) (bool, error) {
 		return true, nil
 	}
 }
-
-// [2,"a"],1 => {"a":1}
-// ["a",2],1  => "a":[1]
-func makePathAndValue(b []byte, path []interface{}, allowAppend bool, val Node) ([]byte, error) {
-	for i, k := range path {
-		if key, ok := k.(string); ok {
-			b = alg.Quote(b, key, false)
-			b = append(b, ":"...)
-		}
-		if i == len(path)-1 {
-			b = append(b, val.node.JSON...)
-			break
-		}
-		n := path[i+1]
-		if _, ok := n.(int); ok {
-			if !allowAppend {
-				return nil, ErrOutOfRange
-			}
-			b = append(b, "["...)
-		} else if _, ok := n.(string); ok {
-			b = append(b, `{`...)
-		} else {
-			panic("path must be either int or string")
-		}
-	}
-	for i := len(path) - 1; i >= 1; i-- {
-		k := path[i]
-		if _, ok := k.(int); ok {
-			b = append(b, "]"...)
-		} else if _, ok := k.(string); ok {
-			b = append(b, `}`...)
-		}
-	}
-	return b, nil
-}
-
-/***************** Cast APIs ***********************/
-
-func (n *Node) Int64() (int64, error) {
-	if err := n.should(types.T_NUMBER); err != nil {
-		return 0, err
-	}
-	return n.toInt64()
-}
-
-func (n *Node) toInt64() (int64, error) {
-	return json.Number(n.node.JSON).Int64()
-}
-
-
-/***************** Set APIs ***********************/
