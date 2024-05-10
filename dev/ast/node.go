@@ -395,6 +395,36 @@ func (n *Node) InterfaceUseGoPrimitive(opts decoder.Options) (interface{}, error
 	}
 }
 
+func (n *Node) ForEachKV(scanner func(key string, elem Node) bool) error {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return err
+	}
+	for i:=0; i<len(n.node.Kids); i+=2 {
+		key, err := n.str(n.node.Kids[i])
+		if err != nil {
+			return err
+		}
+		val := n.sub(n.node.Kids[i+1])
+		if !scanner(key, val) {
+			return nil
+		}
+	}
+	return nil
+}
+
+func (n *Node) ForEachElem(scanner func(index int, elem Node) bool) error {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return err
+	}
+	for i, t := range n.node.Kids {
+		elem := n.sub(t)
+		if !scanner(i, elem) {
+			return nil
+		}
+	}
+	return nil
+}
+
 func (self *Node) GetByPath(path ...interface{}) Node {
 	if l := len(path); l == 0 {
 		return *self
@@ -508,3 +538,5 @@ func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}
 		return true, nil
 	}
 }
+
+func 
