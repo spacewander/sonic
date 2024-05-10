@@ -11,11 +11,6 @@ import (
 	"github.com/bytedance/sonic/internal/rt"
 )
 
-type Pair struct {
-    Key   string
-    Value Node
-}
-
 /***************** Check APIs ***********************/
 
 // Exists returns false only if the self is nil or empty node V_NONE
