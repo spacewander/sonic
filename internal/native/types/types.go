@@ -271,7 +271,7 @@ const (
 // }
 
 func (t Flag) IsEsc() bool {
-	return t & _F_ESC != 0
+	return t & F_ESC != 0
 }
 
 func (t Token) Peek(json string) byte {

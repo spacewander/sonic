@@ -104,10 +104,12 @@ func NewAny(val interface{}) Node {
 	} else if nn, isNode := val.(*Node); isNode {
 		return *nn
 	}
-	ret := Node{}
-	ret.node.Kind = types.Type(V_ANY)
-	ret.mut = append(ret.mut, val)
-	return ret
+	return Node{
+		node: types.Node{
+			Kind: types.Type(V_ANY),
+		},
+		mut: []interface{}{val},
+	}
 }
 
 func (n *Node) any() interface{} {
@@ -133,7 +135,7 @@ func NewBool(v bool) Node {
 // NewNumber creates a json.Number node
 // v must be a decimal string complying with RFC8259
 func NewNumber(v json.Number) Node {
-    return newRawNodeUnsafe(string(v), 0)
+    return newRawNodeLoad(string(v), 0)
 }
 
 // NewString creates a node of type V_STRING. 
@@ -143,9 +145,9 @@ func NewString(v string) Node {
 	s := encoder.Quote(v)
 	esc := len(s) > len(v) + 2
 	if esc {
-		return newRawNodeUnsafe(s, types.F_ESC)
+		return newRawNodeLoad(s, types.F_ESC)
 	}
-	return newRawNodeUnsafe(s, 0)
+	return newRawNodeLoad(s, 0)
 }
 
 func NewInt64(v int64) Node {
@@ -153,7 +155,7 @@ func NewInt64(v int64) Node {
 	if err != nil {
 		return newError(err)
 	}
-	return newRawNodeUnsafe(rt.Mem2Str(s), 0)
+	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
 
 func NewFloat(v float64) Node {
@@ -161,7 +163,7 @@ func NewFloat(v float64) Node {
 	if err != nil {
 		return newError(err)
 	}
-	return newRawNodeUnsafe(rt.Mem2Str(s), 0)
+	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
 
 func (n *Node) Raw() (string, error) {
@@ -303,7 +305,7 @@ func (n *Node) Array(buf *[]Node) error {
 			*buf = tmp[:ol]
 		}
 		for _, t := range n.node.Kids {
-			*buf = append(*buf, n.getKid(t))
+			*buf = append(*buf, n.getKidLoad(t))
 	}
 	return nil
 	case types.Type(V_ANY):
@@ -333,7 +335,7 @@ func (n *Node) Map(buf map[string]Node) error {
 				return err
 			}
 			tt := n.node.Kids[i+1]
-			val := n.getKid(tt)
+			val := n.getKidLoad(tt)
 			buf[key] = val
 			i += 2
 		}
@@ -417,7 +419,7 @@ func (n *Node) ForEachKV(scanner func(key string, elem Node) bool) error {
 		if err != nil {
 			return err
 		}
-		val := n.getKid(n.node.Kids[i+1])
+		val := n.getKidLoad(n.node.Kids[i+1])
 		if !scanner(key, val) {
 			return nil
 		}
@@ -430,7 +432,7 @@ func (n *Node) ForEachElem(scanner func(index int, elem Node) bool) error {
 		return err
 	}
 	for i, t := range n.node.Kids {
-		elem := n.getKid(t)
+		elem := n.getKidLoad(t)
 		if !scanner(i, elem) {
 			return nil
 		}

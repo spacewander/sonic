@@ -7,7 +7,8 @@ import (
 
 const (
 	_F_MUT = types.Flag(1<<2) // mutated
-	_F_KEY = types.Flag(1<<1) // string
+	_F_KEY = types.Flag(1<<3) // key string in mut
+	// _F_RAW = types.Flag(1<<4) // raw json
 )
 
 func (n *Node) arrAt(i int) *types.Token {
@@ -25,7 +26,6 @@ func (n *Node) arrSet(i int, val interface{}) error {
 	l := len(n.mut)
 	*t = types.Token{
 		Kind: types.Type(V_ANY),
-		Flag: _F_MUT,
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
@@ -38,7 +38,6 @@ func (n *Node) arrAdd( val interface{}) error {
 	l := len(n.mut)
 	v := types.Token{
 		Kind: types.Type(V_ANY),
-		Flag: _F_MUT,
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
@@ -58,7 +57,7 @@ func (n *Node) arrDel(i int) error {
 		right = n.node.Kids[i+1:]
 	}
 	n.node.Kids = append(n.node.Kids[:i], right...)
-	if t.Flag & _F_MUT != 0 {
+	if t.Kind == types.Type(V_ANY) {
 		x := int(t.Off)
 		var right []interface{}
 		if x < len(n.mut) - 1 {
@@ -92,7 +91,6 @@ func (n *Node) objSet(key string, val interface{}) error {
 	l := len(n.mut)
 	*t = types.Token{
 		Kind: types.Type(V_ANY),
-		Flag: _F_MUT,
 		Off: uint32(l),
 	}
 	n.mut = append(n.mut, val)
@@ -110,7 +108,6 @@ func (n *Node) objAdd(key string, val interface{}) error {
 	}
 	v := types.Token{
 		Kind: types.Type(V_ANY),
-		Flag: _F_MUT,
 		Off: uint32(l+1),
 	}
 	n.mut = append(n.mut, key)
@@ -135,7 +132,7 @@ func (n *Node) objDel(key string) error {
 		right = n.node.Kids[i+2:]
 	}
 	n.node.Kids = append(n.node.Kids[:i], right...)
-	if t.Flag & _F_MUT != 0 {
+	if t.Kind == types.Type(V_ANY) {
 		x := int(t.Off)
 		var right []interface{}
 		if x < len(n.mut) - 2 {
@@ -153,16 +150,20 @@ func (n *Node) objDel(key string) error {
 //   - array/object, parse to Node for one layer
 //   - mut type, use interface{}, which is stored at self.mut[0]
 // TODO: handle mut token
-func (n *Node) getKid(t types.Token) Node {
-	if t.Flag & _F_MUT == 0 {
-		return newRawNodeUnsafe(t.Raw(n.node.JSON), t.Flag)
+func (n *Node) getKidLoad(t types.Token) Node {
+	if t.Kind != types.Type(V_ANY) {
+		return newRawNodeLoad(t.Raw(n.node.JSON), t.Flag)
 	} else {
-		return NewAny(n.getMut(t))
+		return NewAny(n.mut[t.Off])
 	}
 }
 
-func (n *Node) getMut(t types.Token) interface{} {
-	return n.mut[t.Off]
+func (n *Node) getKidRaw(t types.Token) Node {
+	if t.Kind != types.Type(V_ANY) {
+		return newRawNode(t.Raw(n.node.JSON), t.Flag)
+	} else {
+		return NewAny(n.mut[t.Off])
+	}
 }
 
 func (self *Node) should(t types.Type) error {
@@ -183,7 +184,7 @@ func (n *Node) get(key string) Node  {
 	if err != nil {
 		return newError(err)
 	}
-	return n.getKid(*t)
+	return n.getKidLoad(*t)
 }
 
 func (n *Node) index(key int) Node  {
@@ -194,7 +195,7 @@ func (n *Node) index(key int) Node  {
 	if t == nil {
 		return emptyNode
 	}
-	return n.getKid(*t)
+	return n.getKidLoad(*t)
 }
 
 func (n *Node) json(t types.Token) string {
@@ -213,6 +214,15 @@ func (n *Node) str(t types.Token) (string, error) {
 		return "", makeSyntaxError(raw, int(t.Off), err.Message())
 	} else {
 		return s, nil
+	}
+}
+
+// quoted
+func (n *Node) key(t types.Token) (string) {
+	if t.Flag & _F_KEY == 0 {
+		return n.json(t)
+	} else {
+		return n.mut[t.Off].(string)
 	}
 }
 
@@ -247,10 +257,16 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 
 
 // Note: not validate the input json, only used internal
-func newRawNodeUnsafe(json string, flag types.Flag) Node {
+func newRawNodeLoad(json string, flag types.Flag) Node {
 	n := types.NewNode(json, flag)
 	if !n.Kind.IsComplex() {
 		return Node{n, nil}
 	}
 	return NewRaw(json)
 }
+
+// Note: not load sub layer, only used for encoding..
+func newRawNode(json string, flag types.Flag) Node {
+	return Node{types.NewNode(json, flag), nil}
+}
+
