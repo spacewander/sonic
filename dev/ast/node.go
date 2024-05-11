@@ -21,8 +21,14 @@ const (
     V_OBJECT = int(types.T_OBJECT)
     V_STRING = int(types.T_STRING)
     V_NUMBER = int(types.T_NUMBER)
-    V_ANY    = V_NUMBER + 1 // go interface{}
+    V_ANY    = V_NUMBER + 1 // go interface{}, only appears when using `SetXX()` API
 )
+
+// JSON Node
+type Node struct {
+	node types.Node
+	mut []interface{}
+}
 
 // Type returns json type represented by the node
 // It will be one of belows:
@@ -74,9 +80,9 @@ func (self *Node) isMut() bool{
 }
 
 var (
-    nullNode  = types.NewNode("null", false)
-    trueNode  = types.NewNode("true", false)
-    falseNode = types.NewNode("false", false)
+    nullNode  = types.NewNode("null", 0)
+    trueNode  = types.NewNode("true", 0)
+    falseNode = types.NewNode("false", 0)
 )
 
 // NewRaw creates a node of raw json.
@@ -89,13 +95,23 @@ func NewRaw(json string) Node {
 	return n
 }
 
-// NewAny creates a node of type V_ANY if any's type isn't Node or *Node
+// NewAny creates a node of type:
+//   - V_ANY: if any's type isn't Node or *Node
+//   val.Type(): if any's type is Node or *Node
 func NewAny(val interface{}) Node {
-    js, err := encoder.Encode(val, 0)
-	if err != nil {
-		return newError(err)
+	if n, isNode := val.(Node); isNode {
+		return n
+	} else if nn, isNode := val.(*Node); isNode {
+		return *nn
 	}
-	return NewRaw(rt.Mem2Str(js))
+	ret := Node{}
+	ret.node.Kind = types.Type(V_ANY)
+	ret.mut = append(ret.mut, val)
+	return ret
+}
+
+func (n *Node) any() interface{} {
+	return n.mut[0]
 }
 
 // NewNull creates a node of type V_NULL
@@ -117,7 +133,7 @@ func NewBool(v bool) Node {
 // NewNumber creates a json.Number node
 // v must be a decimal string complying with RFC8259
 func NewNumber(v json.Number) Node {
-    return newRawNodeUnsafe(string(v), false)
+    return newRawNodeUnsafe(string(v), 0)
 }
 
 // NewString creates a node of type V_STRING. 
@@ -126,7 +142,10 @@ func NewNumber(v json.Number) Node {
 func NewString(v string) Node {
 	s := encoder.Quote(v)
 	esc := len(s) > len(v) + 2
-	return newRawNodeUnsafe(s, esc)
+	if esc {
+		return newRawNodeUnsafe(s, types.F_ESC)
+	}
+	return newRawNodeUnsafe(s, 0)
 }
 
 func NewInt64(v int64) Node {
@@ -134,7 +153,7 @@ func NewInt64(v int64) Node {
 	if err != nil {
 		return newError(err)
 	}
-	return newRawNodeUnsafe(rt.Mem2Str(s), false)
+	return newRawNodeUnsafe(rt.Mem2Str(s), 0)
 }
 
 func NewFloat(v float64) Node {
@@ -142,184 +161,199 @@ func NewFloat(v float64) Node {
 	if err != nil {
 		return newError(err)
 	}
-	return newRawNodeUnsafe(rt.Mem2Str(s), false)
-}
-
-// NewBytes encodes given src with Base64 (RFC 4648), and creates a node of type V_STRING.
-func NewBytes(src []byte) Node {
-    if len(src) == 0 {
-        panic("empty src bytes")
-    }
-    out := encodeBase64(src)
-    return NewString(out)
-}
-
-func (self *Node) should(t types.Type) error {
-    if err := self.Error(); err != "" {
-        return self
-    }
-    if  self.node.Kind != t {
-        return ErrUnsupportType
-    }
-    return nil
-}
-
-func (n *Node) get(key string) Node  {
-	if err := n.should(types.T_OBJECT); err != nil {
-		return newError(err)
-	}
-	_, t, err := n.objAt(key)
-	if err != nil {
-		return newError(err)
-	}
-	return n.sub(*t)
-}
-
-func (n *Node) index(key int) Node  {
-	if err := n.should(types.T_ARRAY); err != nil {
-		return newError(err)
-	}
-	t := n.arrAt(key)
-	if t == nil {
-		return emptyNode
-	}
-	return n.sub(*t)
+	return newRawNodeUnsafe(rt.Mem2Str(s), 0)
 }
 
 func (n *Node) Raw() (string, error) {
 	if n.Error() != "" {
 		return "", n
 	}
+	if n.isMut() {
+		js, err := n.MarshalJSON()
+		if err != nil {
+			return "", err
+		}
+		return rt.Mem2Str(js), nil
+	}
 	return n.node.JSON, nil
 }
 
 func (n *Node) Bool() (bool, error) {
 	switch n.node.Kind {
-		case types.T_FALSE: return false, nil
-		case types.T_TRUE: return true, nil
-		default: return false, ErrUnsupportType
+	case types.T_FALSE: return false, nil
+	case types.T_TRUE: return true, nil
+	case types.Type(V_ANY):
+		b, ok := n.any().(bool)
+		if !ok {
+			return false, ErrUnsupportType
+		}
+		return b, nil
+	default: return false, ErrUnsupportType
 	}
 }
 
 func (n *Node) Int64() (int64, error) {
-	if err := n.should(types.T_NUMBER); err != nil {
+	if err := n.Check(); err != nil {
 		return 0, err
 	}
-	var st types.JsonState
-	e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
-	if e < 0 {
-		return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
-	}
-	switch st.Vt {
-		case types.V_INTEGER: return st.Iv, nil
-		default: return 0, ErrUnsupportType
+	switch n.node.Kind {
+	case types.T_NUMBER:
+		var st types.JsonState
+		e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
+		if e < 0 {
+			return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+		}
+		switch st.Vt {
+			case types.V_INTEGER: return st.Iv, nil
+			default: return 0, ErrUnsupportType
+		}
+	case types.Type(V_ANY):
+		v, ok := castToInt64(n.any())
+		if !ok {
+			return 0, ErrUnsupportType
+		}
+		return v, nil
+	default:
+		return 0, ErrUnsupportType
 	}
 }
 
 func (n *Node) Float64() (float64, error) {
-	if err := n.should(types.T_NUMBER); err != nil {
+	if err := n.Check(); err != nil {
 		return 0, err
 	}
-	var st types.JsonState
-	e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
-	if e < 0 {
-		return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
-	}
-	switch st.Vt {
-		case types.V_INTEGER: return float64(st.Iv), nil
-		case types.V_DOUBLE: return st.Dv, nil
-		default: return 0, ErrUnsupportType
+	switch n.node.Kind {
+	case types.T_NUMBER:
+		var st types.JsonState
+		e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
+		if e < 0 {
+			return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+		}
+		switch st.Vt {
+			case types.V_INTEGER: return float64(st.Iv), nil
+			case types.V_DOUBLE: return st.Dv, nil
+			default: return 0, ErrUnsupportType
+		}
+	case types.Type(V_ANY):
+		v, ok := castToFloat64(n.any())
+		if !ok {
+			return 0, ErrUnsupportType
+		}
+		return v, nil
+	default:
+		return 0, ErrUnsupportType
 	}
 }
 
 func (n *Node) Number() (json.Number, error) {
-	if err := n.should(types.T_NUMBER); err != nil {
+	if err := n.Check(); err != nil {
 		return "", err
 	}
-	return json.Number(n.node.JSON), nil
+	switch n.node.Kind {
+	case types.T_NUMBER:
+		return json.Number(n.node.JSON), nil
+	case types.Type(V_ANY):
+		v, ok := castToNumber(n.any())
+		if !ok {
+			return "", ErrUnsupportType
+		}
+		return v, nil
+	default:
+		return "", ErrUnsupportType
+	}
 }
 
 func (n *Node) String() (string, error) {
-	if err := n.should(types.T_STRING); err != nil {
+	if err := n.Check(); err != nil {
 		return "", err
 	}
-	if !n.node.Flag.IsEsc() {
-		return n.node.JSON[1: len(n.node.JSON) - 1], nil
-	}
-	s, err := unquote(n.node.JSON)
-	if err != 0 {
-		return "", makeSyntaxError(n.node.JSON, 0, err.Message())
-	} else {
-		return s, nil
+	switch n.node.Kind {
+	case types.T_STRING:
+		if !n.node.Flag.IsEsc() {
+			return n.node.JSON[1: len(n.node.JSON) - 1], nil
+		}
+		s, err := unquote(n.node.JSON)
+		if err != 0 {
+			return "", makeSyntaxError(n.node.JSON, 0, err.Message())
+		} else {
+			return s, nil
+		}
+	case types.Type(V_ANY):
+		v, ok := castToString(n.any())
+		if !ok {
+			return "", ErrUnsupportType
+		}
+		return v, nil
+	default:
+		return "", ErrUnsupportType
 	}
 }
 
 func (n *Node) Array(buf *[]Node) error {
-	if err := n.should(types.T_ARRAY); err != nil {
+	if err := n.Check(); err != nil {
 		return err
 	}
-	l := len(n.node.Kids)
-	ol := len(*buf)
-	if cap(*buf) - ol < l {
-		tmp := make([]Node, ol+l)
-		copy(tmp, *buf)
-		*buf = tmp[:ol]
-	}
-	for _, t := range n.node.Kids {
-		*buf = append(*buf, n.sub(t))
+	switch n.node.Kind {
+	case types.T_ARRAY:
+		l := len(n.node.Kids)
+		ol := len(*buf)
+		if cap(*buf) - ol < l {
+			tmp := make([]Node, ol+l)
+			copy(tmp, *buf)
+			*buf = tmp[:ol]
+		}
+		for _, t := range n.node.Kids {
+			*buf = append(*buf, n.getKid(t))
 	}
 	return nil
+	case types.Type(V_ANY):
+		ok := castToArray(n.any(), buf)
+		if !ok {
+			return ErrUnsupportType
+		}
+		return nil
+	default:
+		return ErrUnsupportType
+	}
 }
 
 func (n *Node) Map(buf map[string]Node) error {
 	if err := n.should(types.T_OBJECT); err != nil {
 		return err
 	}
-	for i := 0; i<len(n.node.Kids);  {
-		t := n.node.Kids[i];
-		key, err := n.str(t)
-		if err != nil {
-			return err
-		}
-		tt := n.node.Kids[i+1]
-		val := n.sub(tt)
-		buf[key] = val
-		i += 2
+	if err := n.Check(); err != nil {
+		return err
 	}
-	return nil
-}
-
-func (n *Node) InterfaceUseNode() (interface{}, error) {
 	switch n.node.Kind {
-	case types.T_NULL:
-		return nil, nil
-	case types.T_FALSE:
-		return false, nil
-	case types.T_TRUE:
-		return true, nil
-	case types.T_STRING:
-		return n.String()
-	case types.T_NUMBER:
-		return n.Number()
-	case types.T_ARRAY:
-		buf := make([]Node, 0, len(n.node.Kids))
-		err := n.Array(&buf)
-		return buf, err
 	case types.T_OBJECT:
-		buf := make(map[string]Node, len(n.node.Kids)/2)
-		err := n.Map(buf)
-		return buf, err
-	case V_ERROR:
-		return nil, n
-	case V_NONE:
-		return nil, ErrNotExist
+		for i := 0; i<len(n.node.Kids);  {
+			t := n.node.Kids[i];
+			key, err := n.str(t)
+			if err != nil {
+				return err
+			}
+			tt := n.node.Kids[i+1]
+			val := n.getKid(tt)
+			buf[key] = val
+			i += 2
+		}
+		return nil
+	case types.Type(V_ANY):
+		ok := castToMap(n.any(), buf)
+		if !ok {
+			return ErrUnsupportType
+		}
+		return nil
 	default:
-		return nil, ErrUnsupportType
+		return ErrUnsupportType
 	}
+	
 }
 
 func (n *Node) Interface(opts decoder.Options) (interface{}, error) {
 	switch n.node.Kind {
+	case types.Type(V_ANY):
+		return n.any(), nil
 	case types.T_NULL:
 		return nil, nil
 	case types.T_FALSE:
@@ -383,7 +417,7 @@ func (n *Node) ForEachKV(scanner func(key string, elem Node) bool) error {
 		if err != nil {
 			return err
 		}
-		val := n.sub(n.node.Kids[i+1])
+		val := n.getKid(n.node.Kids[i+1])
 		if !scanner(key, val) {
 			return nil
 		}
@@ -396,7 +430,7 @@ func (n *Node) ForEachElem(scanner func(index int, elem Node) bool) error {
 		return err
 	}
 	for i, t := range n.node.Kids {
-		elem := n.sub(t)
+		elem := n.getKid(t)
 		if !scanner(i, elem) {
 			return nil
 		}
@@ -427,24 +461,24 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 
 var EstimatedInsertedPathCharSize = 8
 
-func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}) (bool, error) {
+func (self *Node) SetByPath(allowArrayAppend bool, val interface{}, path ...interface{}) (bool, error) {
 	if l := len(path); l == 0 {
-		*self = val
+		*self = NewAny(val)
 		return true, nil
 	} else if l == 1 {
 		// for one layer set
 		switch p := path[0].(type) {
 		case int:
-			e := self.arrSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+			e := self.arrSet(p, val)
 			if e == ErrNotExist && allowArrayAppend {
-				ee := self.arrAdd(val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+				ee := self.arrAdd(val)
 				return false, ee
 			}
 			return e == nil, e 
 		case string:
-			e := self.objSet(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+			e := self.objSet(p, val)
 			if e == ErrNotExist {
-				ee := self.objAdd(p, val.node.Kind, _F_RAW, unsafe.Pointer(&val.node.JSON))
+				ee := self.objAdd(p, val)
 				return false, ee
 			} 
 			return e == nil, e
@@ -481,12 +515,21 @@ func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}
 				panic("path must be either int or string")
 			}
 		}
+		if err != 0 && err != types.ERR_NOT_FOUND {
+			return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
+		}
+		// TODO, pass option
+		js, e := encoder.Encode(val, 0)
+		if e != nil {
+			return false, e
+		}
+		valjs := rt.Mem2Str(js)
 		var b []byte
 		if err == types.ERR_NOT_FOUND {
 			// NOTICE: pos must stop at '}' or ']'
 			s, empty := backward(self.node.JSON, p.pos)
 			path := path[missing:]
-			size := len(self.node.JSON) + len(val.node.JSON) + EstimatedInsertedPathCharSize*(len(path))
+			size := len(self.node.JSON) +  + EstimatedInsertedPathCharSize*(len(path))
 			b = make([]byte, 0, size)
 			b = append(b, self.node.JSON[:s]...)
 			if !empty {
@@ -494,16 +537,14 @@ func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}
 			}
 			// creat new nodes on path
 			var err error
-			b, err = makePathAndValue(b, path, allowArrayAppend, val)
+			b, err = makePathAndValue(b, path, allowArrayAppend, valjs)
 			if err != nil {
-				return true, err
+				return false, err
 			}
-		} else if err != 0 {
-			return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 		} else {
-			b = make([]byte, 0, start+len(val.node.JSON)+(len(self.node.JSON)-p.pos))
+			b = make([]byte, 0, start+len(valjs)+(len(self.node.JSON)-p.pos))
 			b = append(b, self.node.JSON[:start]...)
-			b = append(b, val.node.JSON...)
+			b = append(b, valjs...)
 			b = append(b, self.node.JSON[p.pos:]...)
 		}
 		// refrest the node

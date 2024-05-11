@@ -33,6 +33,8 @@ func (self *Parser) Pos() int {
     return self.pos
 }
 
+
+// parse one layer but no validate sub layers
 func (self *Parser) Parse() (Node, error) {
 	node, err := parseLazy(self.src, nil)
 	if err != nil {
@@ -46,7 +48,7 @@ func NewParser(src string) *Parser {
     return &Parser{src: src}
 }
 
-// get Node
+// get Node and  no validate
 func (self *Parser) GetByPath(path ...interface{}) (Node, error) {
     return parseLazy(self.src[self.pos:], &path)
 }

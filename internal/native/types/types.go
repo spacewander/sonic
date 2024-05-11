@@ -168,6 +168,9 @@ func FreeDbuf(p *byte) {
 
 type Flag uint16
 
+const (
+	F_ESC	= Flag(1<<0)
+)
 
 type Type uint8 
 
@@ -198,19 +201,6 @@ type Node struct {
 	JSON string
 	Kids []Token
 }
-
-// type Node struct {
-//     Kind Type
-//     Flag Flag
-//     Ptr  unsafe.Pointer
-//     Iv   int64
-//     Kids []Node
-// }
-
-const (
-	// _F_RAW 	= Flag(1<<0)
-	_F_ESC	= Flag(1<<0)
-)
 
 type stats struct {
     min int64
@@ -293,11 +283,7 @@ func (t Token) Raw(json string) string {
 }
 
 // for T_OBJECT | T_ARRAY, must remember to handle Kids
-func NewNode(json string, hasEsc bool) Node {
-    flag := Flag(0)
-    if hasEsc {
-        flag |= _F_ESC
-    }
+func NewNode(json string, flag Flag) Node {
     kind := typeJumpTable[json[0]]
 	// if kind == T_OBJECT || kind == T_ARRAY {
     //     flag |= _F_RAW
