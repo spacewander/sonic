@@ -199,6 +199,14 @@ type Node struct {
 	Kids []Token
 }
 
+// type Node struct {
+//     Kind Type
+//     Flag Flag
+//     Ptr  unsafe.Pointer
+//     Iv   int64
+//     Kids []Node
+// }
+
 const (
 	// _F_RAW 	= Flag(1<<0)
 	_F_ESC	= Flag(1<<0)

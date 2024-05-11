@@ -11,6 +11,36 @@ import (
 	"github.com/bytedance/sonic/internal/rt"
 )
 
+const (
+    V_NONE   = 0
+    V_ERROR  = 1
+    V_NULL   = int(types.T_NULL)
+    V_TRUE   = int(types.T_TRUE)
+    V_FALSE  = int(types.T_FALSE)
+    V_ARRAY  = int(types.T_ARRAY)
+    V_OBJECT = int(types.T_OBJECT)
+    V_STRING = int(types.T_STRING)
+    V_NUMBER = int(types.T_NUMBER)
+    V_ANY    = V_NUMBER + 1 // go interface{}
+)
+
+// Type returns json type represented by the node
+// It will be one of belows:
+//
+//	V_NONE   = 0 (empty node)
+//	V_ERROR  = 1 (something wrong)
+//	V_NULL   = 2 (json value `null`)
+//	V_TRUE   = 3 (json value `true`)
+//	V_FALSE  = 4 (json value `false`)
+//	V_ARRAY  = 5 (json value array)
+//	V_OBJECT = 6 (json value object)
+//	V_STRING = 7 (json value string)
+//	V_NUMBER = 8 (json value number )
+//	V_ANY 	 = 9 (go interface{})
+func (self Node) Type() int {
+	return int(self.node.Kind)
+}
+
 /***************** Check APIs ***********************/
 
 // Exists returns false only if the self is nil or empty node V_NONE
@@ -39,22 +69,9 @@ func (self *Node) Check() error {
 	}
 }
 
-// func (self *Node) IsRaw() bool{
-// 	return self != nil && (self.Flag & _F_RAW != 0)
-// }
-
-const (
-	_F_MUT = types.Flag(1<<2) // mutated
-	_F_RAW = types.Flag(1<<1) // raw json
-	_F_KEY = types.Flag(1<<1) // string
-)
-
-
-func (self *Node) IsMut() bool{
+func (self *Node) isMut() bool{
 	return self != nil && len(self.mut) != 0
 }
-
-/***************** New APIs ***********************/
 
 var (
     nullNode  = types.NewNode("null", false)
@@ -147,16 +164,6 @@ func (self *Node) should(t types.Type) error {
     return nil
 }
 
-func (self *Node) should2(t1 types.Type, t2 types.Type) error {
-    if err := self.Error(); err != "" {
-        return self
-    }
-    if  self.node.Kind != t1 && self.node.Kind != t2 {
-        return ErrUnsupportType
-    }
-    return nil
-}
-
 func (n *Node) get(key string) Node  {
 	if err := n.should(types.T_OBJECT); err != nil {
 		return newError(err)
@@ -177,34 +184,6 @@ func (n *Node) index(key int) Node  {
 		return emptyNode
 	}
 	return n.sub(*t)
-}
-
-const (
-    V_NONE   = 0
-    V_ERROR  = 1
-    V_NULL   = int(types.T_NULL)
-    V_TRUE   = int(types.T_TRUE)
-    V_FALSE  = int(types.T_FALSE)
-    V_ARRAY  = int(types.T_ARRAY)
-    V_OBJECT = int(types.T_OBJECT)
-    V_STRING = int(types.T_STRING)
-    V_NUMBER = int(types.T_NUMBER)
-)
-
-// Type returns json type represented by the node
-// It will be one of belows:
-//
-//	V_NONE   = 0 (empty node)
-//	V_ERROR  = 1 (something wrong)
-//	V_NULL   = 2 (json value `null`)
-//	V_TRUE   = 3 (json value `true`)
-//	V_FALSE  = 4 (json value `false`)
-//	V_ARRAY  = 5 (json value array)
-//	V_OBJECT = 6 (json value object)
-//	V_STRING = 7 (json value string)
-//	V_NUMBER = 8 (json value number )
-func (self Node) Type() int {
-	return int(self.node.Kind)
 }
 
 func (n *Node) Raw() (string, error) {
@@ -339,7 +318,7 @@ func (n *Node) InterfaceUseNode() (interface{}, error) {
 	}
 }
 
-func (n *Node) InterfaceUseGoPrimitive(opts decoder.Options) (interface{}, error) {
+func (n *Node) Interface(opts decoder.Options) (interface{}, error) {
 	switch n.node.Kind {
 	case types.T_NULL:
 		return nil, nil

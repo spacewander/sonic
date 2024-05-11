@@ -7,6 +7,12 @@ import (
 	"github.com/bytedance/sonic/internal/native/types"
 )
 
+const (
+	_F_MUT = types.Flag(1<<2) // mutated
+	_F_RAW = types.Flag(1<<1) // raw json
+	_F_KEY = types.Flag(1<<1) // string
+)
+
 // a internal node parsed from native C.
 type Node struct {
 	node types.Node

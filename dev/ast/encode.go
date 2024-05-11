@@ -6,7 +6,7 @@ import (
 )
 
 func (self *Node) MarshalJSON() ([]byte, error) {
-    if !self.IsMut() {
+    if !self.isMut() {
         return rt.Str2Mem(self.node.JSON), nil
     }
     // hanlde mutates
