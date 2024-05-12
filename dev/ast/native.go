@@ -231,7 +231,7 @@ func (n *Node) key(t types.Token) (string) {
 func parseLazy(json string, path *[]interface{}) (Node, error) {
 	// TODO: got real PC of biz caller
 	node := Node{}
-	node.node.Kids = make([]types.Token, 0, types.PredictTokenSize())
+	node.node.Kids = types.NewToken()
 
 	/* parse into inner node */
 	r, p := 0, 0
@@ -244,6 +244,11 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 			break
 		}
 	}
+
+	tmp := make([]types.Token, len(node.node.Kids))
+	copy(tmp, node.node.Kids)
+	types.FreeToken(node.node.Kids)
+	node.node.Kids = tmp
 
 	/* check errors */
 	if r < 0 {

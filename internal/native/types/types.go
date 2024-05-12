@@ -256,6 +256,21 @@ func RecordTokenSize(last int64) {
 	atomic.StoreInt64(&tokenSizeStats.over, over)
 }
 
+var tokenPool = sync.Pool{
+    New: func() interface{} {
+        return make([]Token, 0, _DefaultTokenSize)
+    },
+}
+
+func NewToken() []Token {
+    return tokenPool.Get().([]Token)
+}
+
+func FreeToken(t []Token) {
+    t = (t)[:0]
+    tokenPool.Put(t)
+}
+
 func (n *Node) Grow()  {
     n.Kids = make([]Token, 0, 2 * cap(n.Kids))
 }

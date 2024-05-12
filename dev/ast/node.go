@@ -2,11 +2,10 @@ package ast
 
 import (
 	"encoding/json"
-	"unsafe"
+	"strconv"
 
 	"github.com/bytedance/sonic/decoder"
 	"github.com/bytedance/sonic/encoder"
-	"github.com/bytedance/sonic/internal/native"
 	"github.com/bytedance/sonic/internal/native/types"
 	"github.com/bytedance/sonic/internal/rt"
 )
@@ -200,15 +199,11 @@ func (n *Node) Int64() (int64, error) {
 	}
 	switch n.node.Kind {
 	case types.T_NUMBER:
-		var st types.JsonState
-		e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
-		if e < 0 {
-			return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+		iv, err := strconv.ParseInt(n.node.JSON, 10, 64)
+		if err != nil {
+			return 0, makeSyntaxError(n.node.JSON, 0, err.Error())
 		}
-		switch st.Vt {
-			case types.V_INTEGER: return st.Iv, nil
-			default: return 0, ErrUnsupportType
-		}
+		return iv, nil
 	case types.Type(V_ANY):
 		v, ok := castToInt64(n.any())
 		if !ok {
@@ -226,16 +221,11 @@ func (n *Node) Float64() (float64, error) {
 	}
 	switch n.node.Kind {
 	case types.T_NUMBER:
-		var st types.JsonState
-		e := native.Value(unsafe.Pointer(&n.node.JSON), len(n.node.JSON), 0, &st, 0)
-		if e < 0 {
-			return 0, makeSyntaxError(n.node.JSON, 0, types.ParsingError(e).Message())
+		fv, err := strconv.ParseFloat(n.node.JSON, 64)
+		if err != nil {
+			return 0, makeSyntaxError(n.node.JSON, 0, err.Error())
 		}
-		switch st.Vt {
-			case types.V_INTEGER: return float64(st.Iv), nil
-			case types.V_DOUBLE: return st.Dv, nil
-			default: return 0, ErrUnsupportType
-		}
+		return fv, nil
 	case types.Type(V_ANY):
 		v, ok := castToFloat64(n.any())
 		if !ok {
