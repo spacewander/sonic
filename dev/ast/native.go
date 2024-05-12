@@ -3,6 +3,7 @@ package ast
 import (
 	"github.com/bytedance/sonic/internal/native"
 	"github.com/bytedance/sonic/internal/native/types"
+	"github.com/davecgh/go-spew/spew"
 )
 
 const (
@@ -151,6 +152,7 @@ func (n *Node) objDel(key string) error {
 //   - mut type, use interface{}, which is stored at self.mut[0]
 // TODO: handle mut token
 func (n *Node) getKidLoad(t types.Token) Node {
+	spew.Dump(t)
 	if t.Kind != types.Type(V_ANY) {
 		return newRawNodeLoad(t.Raw(n.node.JSON), t.Flag)
 	} else {

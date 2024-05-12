@@ -18,6 +18,7 @@ package types
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -193,6 +194,27 @@ type Token struct {
 
 func (t Type) IsComplex() bool {
     return t == T_ARRAY || t == T_OBJECT
+}
+
+func (t Type) String() string {
+    switch t {
+    case T_NULL:
+        return "null"
+    case T_TRUE:
+        return "true"
+    case T_FALSE:
+        return "false"
+    case T_ARRAY:
+        return "array"
+    case T_OBJECT:
+        return "object"
+    case T_STRING:
+        return "string"
+    case T_NUMBER:
+        return "number"
+    default:
+        return strconv.Itoa(int(t))
+    }
 }
 
 type Node struct {
