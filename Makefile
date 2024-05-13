@@ -23,9 +23,9 @@ CPU_avx			:= amd64
 CPU_avx2		:= amd64
 CPU_sse  		:= amd64
 
-TMPL_avx		:= 
-TMPL_avx2		:= 
-TMPL_sse 		:= 
+TMPL_avx		:= native_test fastint_test fastfloat_test native_amd64 recover_test
+TMPL_avx2		:= native_test fastint_test fastfloat_test native_amd64 recover_test
+TMPL_sse 		:= native_test fastint_test fastfloat_test native_amd64 recover_test
 
 CFLAGS_avx		:= -msse -mno-sse4 -mavx -mpclmul -mno-avx2 -mstack-alignment=0 -DUSE_AVX=1 -DUSE_AVX2=0
 CFLAGS_avx2		:= -msse -mno-sse4 -mavx -mpclmul -mavx2 -mstack-alignment=0 -DUSE_AVX=1 -DUSE_AVX2=1 

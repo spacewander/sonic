@@ -2,6 +2,7 @@ package ast
 
 import (
 	"encoding/json"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -200,7 +201,7 @@ func TestNode_GetByPath(t *testing.T) {
 			src:  srcArray,
 			args: args{path: []interface{}{7}},
 			want: `[ 1 ]`,
-			val:  []interface{}{1},
+			val:  []interface{}{int64(1)},
 		},
 		{
 			name: "array empty object",
@@ -216,10 +217,10 @@ func TestNode_GetByPath(t *testing.T) {
 			got := self.GetByPath(tt.args.path...)
 			if js, _ := got.Raw(); js != tt.want {
 				t.Errorf("Node.GetByPath() = `%v`, want `%v`", js, tt.want)
-			} else if val, err := got.Interface(decoder.OptionUseInt64); val != tt.val {
-				t.Errorf("Node.Interface() = %v, want %v", got, tt.want)
+			} else if val, err := got.Interface(decoder.OptionUseInt64); !reflect.DeepEqual(val, tt.val) {
+				t.Errorf("Node.Interface() = %v, val %v", val, tt.val)
 			} else if err != nil && tt.err == nil || err == nil && tt.err != nil {
-				t.Errorf("Node.Interface() = %v, want %v", err, tt.err)
+				t.Errorf("Node.Interface() = %v, err %v", err, tt.err)
 			}
 		})
 	}

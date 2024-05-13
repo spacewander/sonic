@@ -261,15 +261,7 @@ func (n *Node) String() (string, error) {
 	}
 	switch n.node.Kind {
 	case types.T_STRING:
-		if !n.node.Flag.IsEsc() {
-			return n.node.JSON[1: len(n.node.JSON) - 1], nil
-		}
-		s, err := unquote(n.node.JSON)
-		if err != 0 {
-			return "", makeSyntaxError(n.node.JSON, 0, err.Message())
-		} else {
-			return s, nil
-		}
+		return raw2str(n.node.JSON, n.node.Flag.IsEsc(), 0)
 	case types.Type(V_ANY):
 		v, ok := castToString(n.any())
 		if !ok {
@@ -364,7 +356,7 @@ func (n *Node) Interface(opts decoder.Options) (interface{}, error) {
 		}
 		return n.Float64()
 	case types.T_ARRAY:
-		buf := make([]interface{}, 0, len(n.node.Kids))
+		buf := make([]interface{}, len(n.node.Kids))
 		for i, tok := range n.node.Kids {
 			js := tok.Raw(n.node.JSON)
 			dc := decoder.NewDecoder(js)

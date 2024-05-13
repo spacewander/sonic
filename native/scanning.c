@@ -54,6 +54,16 @@ static inline char isspace(char ch) {
     return ch == ' ' || ch == '\r' || ch == '\n' | ch == '\t';
 }
 
+// asumming start at '}', ']', ','
+static always_inline long backward(const GoString *src, long p) {
+    for (p = p-1; p >= 0; p--) {
+        if (!isspace(src->buf[p])) {
+            break;
+        }
+    }
+    return p+1;
+}
+
 const int MASK_USE_NUMBER = 1<<1;
 
 static inline void vdigits(const GoString *src, long *p, JsonState *ret, uint64_t flag) {
@@ -1538,7 +1548,7 @@ static always_inline int get_structural_maskx16(const char *s) {
 }
 
 // skip the number at the next '}', ']' or ',' or the ending of json.
-static always_inline long skip_number_fast(const GoString *src, long *p) {
+static always_inline long skip_number_fast(const GoString *src, long *p, bool remain_blank) {
     size_t nb = src->len - *p;
     const char *s = src->buf + *p;
     long vi = *p - 1;
@@ -1548,7 +1558,7 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb >= 32)) {
         if ((m = get_structural_maskx32(s))) {
             *p = s - src->buf + __builtin_ctzll(m);
-            return vi;
+            break;
         }
         s += 32, nb -= 32;
     }
@@ -1557,7 +1567,7 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb >= 16)) {
         if ((m = get_structural_maskx16(s))) {
             *p = s - src->buf + __builtin_ctzll(m);
-            return vi;
+            break;
         }
         s += 16, nb -= 16;
     }
@@ -1565,11 +1575,16 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb > 0)) {
         if (*s == '}' || *s == ']' || *s == ',') {
             *p = s - src->buf;
-            return vi;
+            break;
         }
         s++, nb--;
     }
-    *p = s - src->buf;
+
+    if (!remain_blank) {
+        /* fast-skip may remain trailing blanks, go backward to drop them*/
+        *p = backward(src, *p);
+    }
+    
     return vi;
 }
 
@@ -1687,7 +1702,7 @@ long skip_one_fast(const GoString *src, long *p) {
         case '[': return skip_array_fast(src, p);
         case '{': return skip_object_fast(src, p);
         case '"': return skip_string_fast(src, p);
-        case '-': case '0' ... '9': return skip_number_fast(src, p);
+        case '-': case '0' ... '9': return skip_number_fast(src, p, true);
         case 't': case 'n': { if (*p + 3 <= src->len) { *p += 3; } else { return -ERR_EOF; } }; break;
         case 'f': { if (*p + 4 <= src->len) { *p += 4; } else { return -ERR_EOF; } }; break;
         case  0 : return -ERR_EOF;
@@ -1949,15 +1964,21 @@ long validate_utf8_fast(const GoString *s) {
 
 #define F_ESC (1<<0)
 
-static always_inline void visit_null(Token* token) {
+static always_inline void visit_null(Token* token, long p) {
     token->kind = T_NULL;
+    token->off = p;
+    token->len = 4;
 }
 
-static always_inline void visit_bool(Token* token, bool v) {
+static always_inline void visit_bool(Token* token, bool v, long p) {
     if (v) {
         token->kind = T_TRUE;
+        token->off = p;
+        token->len = 4;
     } else {
         token->kind = T_FALSE;
+        token->off = p;
+        token->len = 5;
     }
 }
 
@@ -2105,7 +2126,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                     return -ERR_EOF;
                 }
                 if (src->buf[i] == 'r' && src->buf[i + 1] == 'u' && src->buf[i + 2] == 'e') {
-                    visit_bool(kind, true);
+                    visit_bool(kind, true, *p - 1);
                     *p = i + 3;
                 } else {
                     return -ERR_INVAL;
@@ -2117,7 +2138,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                     return -ERR_EOF;
                 }
                 if (src->buf[i] == 'a' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 's' && src->buf[i + 3] == 'e') {
-                    visit_bool(kind, false);
+                    visit_bool(kind, false, *p - 1);
                     *p = i + 4;
                 } else {
                     return -ERR_INVAL;
@@ -2129,7 +2150,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                     return -ERR_EOF;
                 }
                 if (src->buf[i] == 'u' && src->buf[i + 1] == 'l' && src->buf[i + 2] == 'l') {
-                    visit_null(kind);
+                    visit_null(kind, *p - 1);
                     *p = i + 3;
                 } else {
                     return -ERR_INVAL;
@@ -2137,7 +2158,7 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
                 break;
             }
             case '-': case '0' ... '9': {
-                long r = skip_number_fast(src, p);
+                long r = skip_number_fast(src, p, false);
                 if (r < 0) {
                     return -ERR_INVAL;
                 }

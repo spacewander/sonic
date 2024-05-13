@@ -205,15 +205,16 @@ func (n *Node) json(t types.Token) string {
 }
 
 func (n *Node) str(t types.Token) (string, error) {
-	raw := n.json(t)
-	if !t.Flag.IsEsc(){
-		// remove the quotes
-		return raw[1: len(raw) - 1], nil
+	return raw2str(n.json(t), t.Flag.IsEsc(), t.Off)
+}
+
+func raw2str(json string, esc bool, off uint32) (string, error) {
+	if !esc {
+		return json[1: len(json) - 1], nil
 	}
-	
-	s, err := unquote(raw)
+	s, err := unquote(json[1: len(json) - 1])
 	if err != 0 {
-		return "", makeSyntaxError(raw, int(t.Off), err.Message())
+		return "", makeSyntaxError(json, int(off), err.Message())
 	} else {
 		return s, nil
 	}
