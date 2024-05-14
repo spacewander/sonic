@@ -3,14 +3,6 @@ package ast
 
 const _blankCharsMask = (1 << ' ') | (1 << '\t') | (1 << '\r') | (1 << '\n')
 
-const (
-    bytesNull   = "null"
-    bytesTrue   = "true"
-    bytesFalse  = "false"
-    bytesEmptyObject = "{}"
-    bytesArray  = "[]"
-)
-
 func isSpace(c byte) bool {
     return (int(1<<c) & _blankCharsMask) != 0
 }

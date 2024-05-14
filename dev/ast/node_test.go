@@ -139,6 +139,7 @@ func TestNode_GetByPath(t *testing.T) {
 		path []interface{}
 	}
 	var srcArray = ` [ 1 , null , true , false , 1.0 , "\"" , [ ] , [ 1 ] , { } , { "1" : 1 } ] `
+	var srcObject = ` { "1" : 1 , "2" : null , "3" : true , "4" : false , "5" : 1.0 , "6" : "\"" , "7" : [ ] , "8" : [ 1 ] , "9" : { } , "10" : { "1" : 1 } } `
 	tests := []struct {
 		name   string
 		src    string
@@ -204,11 +205,102 @@ func TestNode_GetByPath(t *testing.T) {
 			val:  []interface{}{int64(1)},
 		},
 		{
+			name: "array array int",
+			src:  srcArray,
+			args: args{path: []interface{}{7, 0}},
+			want: `1`,
+			val:  int64(1),
+		},
+		{
 			name: "array empty object",
 			src:  srcArray,
 			args: args{path: []interface{}{8}},
 			want: `{ }`,
 			val:  map[string]interface{}{},
+		},
+		{
+			name: "array object",
+			src:  srcArray,
+			args: args{path: []interface{}{9}},
+			want: `{ "1" : 1 }`,
+			val:  map[string]interface{}{"1": int64(1)},
+		},
+		{
+			name: "array object int",
+			src:  srcArray,
+			args: args{path: []interface{}{9, "1"}},
+			want: `1`,
+			val:  int64(1),
+		},
+		{
+			name: "object int",
+			src:  srcObject,
+			args: args{path: []interface{}{"1"}},
+			want: `1`,
+			val:  int64(1),
+		},
+		{
+			name: "object null",
+			src:  srcObject,
+			args: args{path: []interface{}{"2"}},
+			want: `null`,
+			val:  nil,
+		},
+		{
+			name: "object true",
+			src:  srcObject,
+			args: args{path: []interface{}{"3"}},
+			want: `true`,
+			val:  true,
+		},
+		{
+			name: "object false",
+			src:  srcObject,
+			args: args{path: []interface{}{"4"}},
+			want: `false`,
+			val:  false,
+		},
+		{
+			name: "object float",
+			src:  srcObject,
+			args: args{path: []interface{}{"5"}},
+			want: `1.0`,
+			val:  1.0,
+		},
+		{
+			name: "array string",
+			src:  srcObject,
+			args: args{path: []interface{}{"6"}},
+			want: `"\""`,
+			val:  `"`,
+		},
+		{
+			name: "object empty array",
+			src:  srcObject,
+			args: args{path: []interface{}{"7"}},
+			want: `[ ]`,
+			val:  []interface{}{},
+		},
+		{
+			name: "object array",
+			src:  srcObject,
+			args: args{path: []interface{}{"8"}},
+			want: `[ 1 ]`,
+			val:  []interface{}{int64(1)},
+		},
+		{
+			name: "object empty object",
+			src:  srcObject,
+			args: args{path: []interface{}{"9"}},
+			want: `{ }`,
+			val:  map[string]interface{}{},
+		},
+		{
+			name: "object object",
+			src:  srcObject,
+			args: args{path: []interface{}{"10"}},
+			want: `{ "1" : 1 }`,
+			val:  map[string]interface{}{"1": int64(1)},
 		},
 	}
 	for _, tt := range tests {
