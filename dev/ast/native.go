@@ -153,18 +153,18 @@ func (n *Node) objDel(key string) error {
 //   - mut type, use interface{}, which is stored at self.mut[0]
 // TODO: handle mut token
 func (n *Node) getKidLoad(t types.Token) Node {
-	if t.Kind != types.Type(V_ANY) {
-		return newRawNodeLoad(t.Raw(n.node.JSON), t.Flag)
+	if t.Kind == types.Type(V_ANY) {
+		return NewAny(n.mut[t.Off]) 
 	} else {
-		return NewAny(n.mut[t.Off])
+		return newRawNodeLoad(t.Raw(n.node.JSON), t.Flag)
 	}
 }
 
 func (n *Node) getKidRaw(t types.Token) Node {
-	if t.Kind != types.Type(V_ANY) {
-		return newRawNode(t.Raw(n.node.JSON), 0, t.Flag)
+	if t.Kind == types.Type(V_ANY) {
+		return NewAny(n.mut[t.Off]) 
 	} else {
-		return NewAny(n.mut[t.Off])
+		return newRawNode(t.Raw(n.node.JSON), 0, t.Flag)
 	}
 }
 
@@ -176,28 +176,6 @@ func (self *Node) should(t types.Type) error {
         return ErrUnsupportType
     }
     return nil
-}
-
-func (n *Node) get(key string) Node  {
-	if err := n.should(types.T_OBJECT); err != nil {
-		return *newError(err)
-	}
-	_, t, err := n.objAt(key)
-	if err != nil {
-		return *newError(err)
-	}
-	return n.getKidLoad(*t)
-}
-
-func (n *Node) index(key int) Node  {
-	if err := n.should(types.T_ARRAY); err != nil {
-		return *newError(err)
-	}
-	t := n.arrAt(key)
-	if t == nil {
-		return Node{}
-	}
-	return n.getKidLoad(*t)
 }
 
 func (n *Node) json(t types.Token) string {

@@ -17,8 +17,8 @@ var (
     ErrUnsupportType error = newError(errors.New("not supported type"))
 )
 
-func newError(err error) *Node {
-    return &Node{
+func newError(err error) Node {
+    return Node{
         node: types.Node{
             Kind: V_ERROR,
             JSON: err.Error(),

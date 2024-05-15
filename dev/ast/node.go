@@ -89,7 +89,7 @@ var (
 func NewRaw(json string) Node {
 	n, e := NewParser(json).Parse()
 	if e != nil {
-		return *newError(e)
+		return newError(e)
 	}
 	return n
 }
@@ -152,7 +152,7 @@ func NewString(v string) Node {
 func NewInt64(v int64) Node {
 	s, err := encoder.Encode(v, 0)
 	if err != nil {
-		return *newError(err)
+		return newError(err)
 	}
 	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
@@ -160,7 +160,7 @@ func NewInt64(v int64) Node {
 func NewFloat(v float64) Node {
 	s, err := encoder.Encode(v, 0)
 	if err != nil {
-		return *newError(err)
+		return newError(err)
 	}
 	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
@@ -423,53 +423,114 @@ func (n *Node) ForEachElem(scanner func(index int, elem Node) bool) error {
 	return nil
 }
 
-func (self *Node) GetByPath(path ...interface{}) Node {
-	if l := len(path); l == 0 {
+func (n *Node) Get(key string) Node  {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return newError(err)
+	}
+	_, t, err := n.objAt(key)
+	if err != nil {
+		return newError(err)
+	}
+	return n.getKidLoad(*t)
+}
+
+func (n *Node) get(key string) (string, error)  {
+	if err := n.should(types.T_OBJECT); err != nil {
+		return "", err
+	}
+	_, t, err := n.objAt(key)
+	if err != nil {
+		return "", err
+	}
+	return n.json(*t), nil
+}
+
+func (n *Node) Index(key int) Node  {
+	if err := n.should(types.T_ARRAY); err != nil {
+		return newError(err)
+	}
+	t := n.arrAt(key)
+	if t == nil {
+		return Node{}
+	}
+	return n.getKidLoad(*t)
+}
+
+func (n *Node) index(key int) (string, error)  {
+	if err := n.should(types.T_ARRAY); err != nil {
+		return "", err
+	}
+	t := n.arrAt(key)
+	if t == nil {
+		return "", ErrNotExist
+	}
+	return n.json(*t), nil
+}
+
+func (self *Node) GetByPath(paths ...interface{}) Node {
+	if l := len(paths); l == 0 {
 		return *self
-	} else if l == 1 {
-		switch p := path[0].(type) {
+	} else {
+
+		// first path, using node.index
+		var js = self.node.JSON
+		var err error
+		switch p := paths[0].(type) {
 		case int:
-			return self.index(p)
+			if l == 1 {
+				return self.Index(p)
+			}
+			js, err = self.index(p)
+			if err != nil {
+				return newError(err)
+			}
 		case string:
-			return self.get(p)
+			if l == 1 {
+				return self.Get(p)
+			}
+			js, err = self.get(p)
+			if err != nil {
+				return newError(err)
+			}
 		default:
 			panic("path must be either int or string")
 		}
-	} else {
-		n, err := NewParser(self.node.JSON).GetByPath(path...)
+		
+		// more paths, using parser..
+		n, err := NewParser(js).GetByPath(paths[1:]...)
 		if err != nil {
-			return *newError(err)
-		}
+			return newError(err)
+		} 
 		return n
 	}
 }
 
 var EstimatedInsertedPathCharSize = 8
 
-func (self *Node) SetByPath(allowArrayAppend bool, val interface{}, path ...interface{}) (bool, error) {
+func (self *Node) SetByPath(allowArrayAppend bool, val Node, path ...interface{}) (bool, error) {
 	if l := len(path); l == 0 {
 		*self = NewAny(val)
 		return true, nil
-	} else if l == 1 {
-		// for one layer set
-		switch p := path[0].(type) {
-		case int:
-			e := self.arrSet(p, val)
-			if e == ErrNotExist && allowArrayAppend {
-				ee := self.arrAdd(val)
-				return false, ee
-			}
-			return e == nil, e 
-		case string:
-			e := self.objSet(p, val)
-			if e == ErrNotExist {
-				ee := self.objAdd(p, val)
-				return false, ee
-			} 
-			return e == nil, e
-		default:
-			panic("path must be either int or string")
-		}
+	// } else if l == 1 {
+	// 	// for one layer set
+	// 	switch p := path[0].(type) {
+	// 	case int:
+	// 		e := self.arrSet(p, val)
+	// 		if e == ErrNotExist && allowArrayAppend {
+	// 			ee := self.arrAdd(val)
+	// 			return false, ee
+	// 		}
+	// 		return e == nil, e 
+	// 	case string:
+	// 		e := self.objSet(p, val)
+	// 		if e == ErrNotExist {
+	// 			ee := self.objAdd(p, val)
+	// 			return false, ee
+	// 		} 
+	// 		return e == nil, e
+	// 	default:
+	// 		panic("path must be either int or string")
+	// 	}
 	} else {
 		// multi layers set
 		p := NewParser(self.node.JSON)
@@ -504,17 +565,17 @@ func (self *Node) SetByPath(allowArrayAppend bool, val interface{}, path ...inte
 			return false, makeSyntaxError(self.node.JSON, p.pos, err.Message())
 		}
 		// TODO, pass option
-		js, e := encoder.Encode(val, 0)
-		if e != nil {
-			return false, e
-		}
-		valjs := rt.Mem2Str(js)
+		// js, e := encoder.Encode(val, 0)
+		// if e != nil {
+		// 	return false, e
+		// }
+		valjs := val.node.JSON
 		var b []byte
 		if err == types.ERR_NOT_FOUND {
 			// NOTICE: pos must stop at '}' or ']'
 			s, empty := backward(self.node.JSON, p.pos)
 			path := path[missing:]
-			size := len(self.node.JSON) +  + EstimatedInsertedPathCharSize*(len(path))
+			size := len(self.node.JSON) + len(valjs) + EstimatedInsertedPathCharSize*len(path)
 			b = make([]byte, 0, size)
 			b = append(b, self.node.JSON[:s]...)
 			if !empty {
@@ -548,18 +609,18 @@ func (self *Node) UnsetByPath(path ...interface{}) (bool, error) {
 	if l := len(path); l == 0 {
 		*self = Node{}
 		return true, nil
-	} else if l == 1 {
-		// for one layer set
-		switch p := path[0].(type) {
-		case int:
-			e := self.arrDel(p)
-			return e != ErrNotExist, e 
-		case string:
-			e := self.objDel(p)
-			return e != ErrNotExist, e 
-		default:
-			panic("path must be either int or string")
-		}
+	// } else if l == 1 {
+	// 	// for one layer set
+	// 	switch p := path[0].(type) {
+	// 	case int:
+	// 		e := self.arrDel(p)
+	// 		return e != ErrNotExist, e 
+	// 	case string:
+	// 		e := self.objDel(p)
+	// 		return e != ErrNotExist, e 
+	// 	default:
+	// 		panic("path must be either int or string")
+	// 	}
 	} else {
 		// multi layers set
 		p := NewParser(self.node.JSON)

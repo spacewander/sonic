@@ -64,27 +64,60 @@ func TestNodeParse(t *testing.T) {
 
 func BenchmarkNode_GetByPath(b *testing.B) {
 	b.Run("10/2", func(b *testing.B) {
-		src := getSample(10, 0)
+		src := getSample(10, 1)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
 		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("5")
 		}
 	})
+	b.Run("10/2/2", func(b *testing.B) {
+		src := getSample(10, 1)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i := 0; i < b.N; i++ {
+			x := n.GetByPath("5", "5")
+			if x.Check() != nil {
+				b.Fatal(x.Error())
+			}
+		}
+	})
 	b.Run("100/2", func(b *testing.B) {
-		src := getSample(100, 0)
+		src := getSample(100, 1)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
 		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("50")
 		}
 	})
+	b.Run("100/2/2", func(b *testing.B) {
+		src := getSample(100, 1)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i := 0; i < b.N; i++ {
+			x := n.GetByPath("50", "50")
+			if x.Check() != nil {
+				b.Fatal(x.Error())
+			}
+		}
+	})
 	b.Run("1000/2", func(b *testing.B) {
-		src := getSample(1000, 0)
+		src := getSample(1000, 1)
 		b.ResetTimer()
 		n, _ := NewParser(src).Parse()
 		for i := 0; i < b.N; i++ {
 			_ = n.GetByPath("500")
+		}
+	})
+	b.Run("1000/2/2", func(b *testing.B) {
+		src := getSample(1000, 1)
+		b.ResetTimer()
+		n, _ := NewParser(src).Parse()
+		for i := 0; i < b.N; i++ {
+			x := n.GetByPath("500", "500")
+			if x.Check() != nil {
+				b.Fatal(x.Error())
+			}
 		}
 	})
 }
