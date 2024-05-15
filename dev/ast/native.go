@@ -1,8 +1,10 @@
 package ast
 
 import (
+	"github.com/bytedance/sonic/internal/encoder/alg"
 	"github.com/bytedance/sonic/internal/native"
 	"github.com/bytedance/sonic/internal/native/types"
+	"github.com/bytedance/sonic/internal/rt"
 )
 
 const (
@@ -178,22 +180,22 @@ func (self *Node) should(t types.Type) error {
 
 func (n *Node) get(key string) Node  {
 	if err := n.should(types.T_OBJECT); err != nil {
-		return newError(err)
+		return *newError(err)
 	}
 	_, t, err := n.objAt(key)
 	if err != nil {
-		return newError(err)
+		return *newError(err)
 	}
 	return n.getKidLoad(*t)
 }
 
 func (n *Node) index(key int) Node  {
 	if err := n.should(types.T_ARRAY); err != nil {
-		return newError(err)
+		return *newError(err)
 	}
 	t := n.arrAt(key)
 	if t == nil {
-		return emptyNode
+		return Node{}
 	}
 	return n.getKidLoad(*t)
 }
@@ -223,7 +225,10 @@ func (n *Node) key(t types.Token) (string) {
 	if t.Flag & _F_KEY == 0 {
 		return n.json(t)
 	} else {
-		return n.mut[t.Off].(string)
+		v := n.mut[t.Off].(string);
+		buf := make([]byte, 0, len(v)+2)
+		buf = alg.Quote(buf, v, false)
+		return rt.Mem2Str(buf)
 	}
 }
 

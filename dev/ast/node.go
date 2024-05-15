@@ -89,7 +89,7 @@ var (
 func NewRaw(json string) Node {
 	n, e := NewParser(json).Parse()
 	if e != nil {
-		return newError(e)
+		return *newError(e)
 	}
 	return n
 }
@@ -152,7 +152,7 @@ func NewString(v string) Node {
 func NewInt64(v int64) Node {
 	s, err := encoder.Encode(v, 0)
 	if err != nil {
-		return newError(err)
+		return *newError(err)
 	}
 	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
@@ -160,7 +160,7 @@ func NewInt64(v int64) Node {
 func NewFloat(v float64) Node {
 	s, err := encoder.Encode(v, 0)
 	if err != nil {
-		return newError(err)
+		return *newError(err)
 	}
 	return newRawNodeLoad(rt.Mem2Str(s), 0)
 }
@@ -170,6 +170,7 @@ func (n *Node) Raw() (string, error) {
 		return "", n
 	}
 	if n.isMut() {
+		println("marshal json")
 		js, err := n.MarshalJSON()
 		if err != nil {
 			return "", err
@@ -437,8 +438,7 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 	} else {
 		n, err := NewParser(self.node.JSON).GetByPath(path...)
 		if err != nil {
-			println("err", err.Error())
-			return newError(err)
+			return *newError(err)
 		}
 		return n
 	}

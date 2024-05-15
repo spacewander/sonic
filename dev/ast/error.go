@@ -12,14 +12,13 @@ var (
     // ErrNotExist means both key and value doesn't exist 
     ErrNotExist error = newError(errors.New("not exist"))
 
-    emptyNode = newError(errors.New("not exist"))
 
     // ErrUnsupportType means API on the node is unsupported
     ErrUnsupportType error = newError(errors.New("not supported type"))
 )
 
-func newError(err error) Node {
-    return Node{
+func newError(err error) *Node {
+    return &Node{
         node: types.Node{
             Kind: V_ERROR,
             JSON: err.Error(),
