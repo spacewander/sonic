@@ -29,11 +29,13 @@ func newError(err error) Node {
 
 // Error returns error message if the node is invalid
 func (self Node) Error() string {
-    if self.node.Kind != V_ERROR {
-        return ""
+    if self.node.Kind == V_ERROR {
+        return self.node.JSON
+    } else if self.node.Kind == V_NONE {
+		return "not exist"
     } else {
-		return self.node.JSON
-    } 
+        return ""
+    }
 }
 
 func makeSyntaxError(json string, p int, msg string) decoder.SyntaxError {

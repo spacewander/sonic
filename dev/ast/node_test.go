@@ -134,6 +134,74 @@ func BenchmarkParse(b *testing.B) {
 	})
 }
 
+func TestNode_SetByPath(t *testing.T) {
+	type args struct {
+		path []interface{}
+		val interface{}
+		allowArrayAppend bool
+	}
+	tests := []struct {
+		name   string
+		src    string
+		args   args
+		want   string
+		exist  bool
+		err    error
+	}{
+		{
+			name: "self",
+			src:  `{}`,
+			args: args{path: []interface{}{}, val: 1},
+			want: `1`,
+			exist: true,
+		},
+		{
+			name: "empty object",
+			src:  ` { } `,
+			args: args{path: []interface{}{"1"}, val: 1},
+			want: `{"1":1 }`,
+			exist: false,
+		},
+		{
+			name: "one object not-exist",
+			src:  ` { "1" : 1  } `,
+			args: args{path: []interface{}{"2"}, val: 2},
+			want: `{ "1" : 1, "2":2  }`,
+			exist: false,
+		},
+		{
+			name: "one object exist",
+			src:  ` { "1" : 1  } `,
+			args: args{path: []interface{}{"1"}, val: -1},
+			want: `{ "1" : -1  }`,
+			exist: false,
+		},
+		{
+			name: "one object exist",
+			src:  ` { "1" : 1  } `,
+			args: args{path: []interface{}{"1"}, val: -1},
+			want: `{ "1" : -1  }`,
+			exist: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			self := NewRaw(tt.src)
+			exist, err := self.SetByPath(tt.args.allowArrayAppend, tt.args.val, tt.args.path...)
+			if err != nil && tt.err == nil || err == nil && tt.err != nil {
+				t.Errorf("err = %v, want %v", err, tt.err)
+			}
+			if exist != tt.exist {
+				t.Errorf("exist = %v, want %v", exist, tt.exist)
+			}
+			if js, _ := self.Raw(); js != tt.want {
+				t.Errorf("raw = `%v`, want `%v`", js, tt.want)
+			}
+		})
+	}
+	
+}
+
 func TestNode_GetByPath(t *testing.T) {
 	type args struct {
 		path []interface{}
@@ -148,6 +216,13 @@ func TestNode_GetByPath(t *testing.T) {
 		val    interface{}
 		err    error
 	}{
+		{
+			name: "self",
+			src: ` [ 1 ] `,
+			args: args{path: []interface{}{}},
+			want: `[ 1 ]`,
+			val:  []interface{}{int64(1)},
+		},
 		{
 			name: "array int",
 			src:  srcArray,
@@ -268,7 +343,7 @@ func TestNode_GetByPath(t *testing.T) {
 			val:  1.0,
 		},
 		{
-			name: "array string",
+			name: "object string",
 			src:  srcObject,
 			args: args{path: []interface{}{"6"}},
 			want: `"\""`,

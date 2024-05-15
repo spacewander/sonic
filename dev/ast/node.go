@@ -67,7 +67,7 @@ func (self *Node) Valid() bool {
 func (self *Node) Check() error {
 	if self == nil {
 		return ErrNotExist
-	} else if self.node.Kind == V_ERROR {
+	} else if self.node.Kind == V_ERROR || self.node.Kind == V_NONE {
 		return self
 	} else {
 		return nil
@@ -437,6 +437,7 @@ func (self *Node) GetByPath(path ...interface{}) Node {
 	} else {
 		n, err := NewParser(self.node.JSON).GetByPath(path...)
 		if err != nil {
+			println("err", err.Error())
 			return newError(err)
 		}
 		return n

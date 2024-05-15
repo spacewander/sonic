@@ -2023,7 +2023,6 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
             if (src->buf[i + 1] == 'r' && src->buf[i + 2] == 'u' && src->buf[i + 3] == 'e') {
                 node->kind = T_TRUE;
                 *p = i + 4;
-                return 0;
             }
             break;
         }
@@ -2035,7 +2034,6 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
             if (src->buf[i + 1] == 'a' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 's' && src->buf[i + 4] == 'e') {
                 node->kind = T_FALSE;
                 *p = i + 5;
-                return 0;
             }
             break;
         }
@@ -2047,7 +2045,6 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
             if (src->buf[i + 1] == 'u' && src->buf[i + 2] == 'l' && src->buf[i + 3] == 'l') {
                 node->kind = T_NULL;
                 *p = i + 4;
-                return 0;
             }
             break;
         }
@@ -2058,9 +2055,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
                 return -ERR_INVAL;
             }
             node->kind = T_NUMBER;
-            // node->json.buf = src->buf + i;
-            // node->json.len = *p - i;
-            return 0;
+            break;
         }
         case '"': {
             bool esc = false;
@@ -2069,12 +2064,14 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
                 return r;
             }
             node->kind = T_STRING;
-            return 0;
+            break;
         }
         default:
             return -ERR_INVAL;
     }
-    return -ERR_INVAL;
+    node->json.buf = src->buf + i;
+    node->json.len = *p - i;
+    return i;
 }
 
 #define MUST_RETRY 0x12345
