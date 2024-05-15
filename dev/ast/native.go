@@ -205,7 +205,11 @@ func (n *Node) json(t types.Token) string {
 }
 
 func (n *Node) str(t types.Token) (string, error) {
-	return raw2str(n.json(t), t.Flag.IsEsc(), t.Off)
+	if t.Flag & _F_KEY == 0 {
+		return raw2str(n.json(t), t.Flag.IsEsc(), t.Off)
+	} else {
+		return n.mut[t.Off].(string), nil
+	}
 }
 
 func raw2str(json string, esc bool, off uint32) (string, error) {
