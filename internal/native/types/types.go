@@ -320,8 +320,8 @@ func (t Token) Raw(json string) string {
 }
 
 // for T_OBJECT | T_ARRAY, must remember to handle Kids
-func NewNode(json string, flag Flag) Node {
-    kind := typeJumpTable[json[0]]
+func NewNode(json string, start int, flag Flag) Node {
+    kind := typeJumpTable[json[start]]
 	// if kind == T_OBJECT || kind == T_ARRAY {
     //     flag |= _F_RAW
 	// } 

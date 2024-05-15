@@ -2012,7 +2012,7 @@ static always_inline long skip_string_escaped(const GoString *src, long *p, bool
 }
 
 static always_inline long parse_prmitives(const GoString *src, long *p, Node* node) {
-    long i = *p - 1;
+    long i = *p;
     char c = src->buf[i];
     switch (c) {
         case 't': {
@@ -2059,6 +2059,7 @@ static always_inline long parse_prmitives(const GoString *src, long *p, Node* no
         }
         case '"': {
             bool esc = false;
+            *p += 1;
             long r = skip_string_escaped(src, p, &esc);
             if (r < 0) {
                 return r;
@@ -2081,10 +2082,12 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
     xprintf("hello ");
     xprintf("%d ", *p);
     c = advance_ns(src, p);
+    long s = *p - 1;
 
     bool is_obj = true;
     xprintf("%g", src);
     if (unlikely(c != '{' && c != '[')) {
+        *p = *p - 1;
         return parse_prmitives(src, p, node);
     }
 
@@ -2254,13 +2257,14 @@ static always_inline long load_lazy(const GoString *src, long *p, Node* node) {
           xprintf("last is key is\n");
         return -ERR_INVAL;
     }
-     xprintf("remain3 isxx %d is_obj %d \n", commas, is_obj);
-    return 0;
+    xprintf("remain3 isxx %d is_obj %d \n", commas, is_obj);
+    return s;
 }
 
 long parse_lazy(const GoString *src, long *p, Node* node, const GoSlice *path) {
     if (path == NULL) {
-        return load_lazy(src, p, node);
+        node->json = *src;
+        return load_lazy(&node->json, p, node);
     }
 
     GoIface *ps = (GoIface*)(path->buf);
@@ -2272,7 +2276,15 @@ long parse_lazy(const GoString *src, long *p, Node* node, const GoSlice *path) {
 query:
     /* to be safer for invalid json, use slower skip for the demanded fields */
     if (ps == pe) {
-        return load_lazy(src, p, node);
+        node->json.buf = src->buf + *p;
+        node->json.len = src->len - *p;
+        long pp = 0;
+        long r = load_lazy(&node->json, &pp, node);
+        *p += pp;
+        if (r >= 0) {
+            r += pp;
+        }
+        return r;
     }
 
     /* match type: should query key in object, query index in array */

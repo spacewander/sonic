@@ -160,7 +160,7 @@ func (n *Node) getKidLoad(t types.Token) Node {
 
 func (n *Node) getKidRaw(t types.Token) Node {
 	if t.Kind != types.Type(V_ANY) {
-		return newRawNode(t.Raw(n.node.JSON), t.Flag)
+		return newRawNode(t.Raw(n.node.JSON), 0, t.Flag)
 	} else {
 		return NewAny(n.mut[t.Off])
 	}
@@ -237,6 +237,7 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 	/* parse into inner node */
 	r, p := 0, 0
 	for {
+		//TODO: retry from start now, maybe retry from previous position?
 		p = 0
 		r = native.ParseLazy(&json, &p, &node.node, path)
 		if r == -types.MUST_RETRY {
@@ -245,26 +246,28 @@ func parseLazy(json string, path *[]interface{}) (Node, error) {
 			break
 		}
 	}
-
-	tmp := make([]types.Token, len(node.node.Kids))
-	copy(tmp, node.node.Kids)
-	types.FreeToken(node.node.Kids)
-	node.node.Kids = tmp
-
+	// println("r", r, "p", p)
 	/* check errors */
 	if r < 0 {
+		types.FreeToken(node.node.Kids)
 		if r == -int(types.ERR_NOT_FOUND) {
 			return Node{}, ErrNotExist
 		}
 		return Node{},  makeSyntaxError(json, p, types.ParsingError(-r).Message())
 	}
+
+	tmp := make([]types.Token, len(node.node.Kids))
+	copy(tmp, node.node.Kids)
+	types.FreeToken(node.node.Kids)
+	node.node.Kids = tmp
 	return node, nil
 }
 
 
 // Note: not validate the input json, only used internal
+// NOTCIE: json must start at 0 (no space prefix)!!
 func newRawNodeLoad(json string, flag types.Flag) Node {
-	n := types.NewNode(json, flag)
+	n := types.NewNode(json, 0, flag)
 	if !n.Kind.IsComplex() {
 		return Node{n, nil}
 	}
@@ -272,7 +275,6 @@ func newRawNodeLoad(json string, flag types.Flag) Node {
 }
 
 // Note: not load sub layer, only used for encoding..
-func newRawNode(json string, flag types.Flag) Node {
-	return Node{types.NewNode(json, flag), nil}
+func newRawNode(json string, start int, flag types.Flag) Node {
+	return Node{types.NewNode(json, start, flag), nil}
 }
-

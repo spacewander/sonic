@@ -8,19 +8,19 @@ import (
 )
 
 const (
-    _entry__f32toa = 51552
+    _entry__f32toa = 51424
     _entry__f64toa = 192
-    _entry__format_significand = 55728
+    _entry__format_significand = 55600
     _entry__format_integer = 3040
     _entry__get_by_path = 25712
     _entry__fsm_exec = 17920
     _entry__advance_string = 14320
-    _entry__advance_string_default = 57120
+    _entry__advance_string_default = 56992
     _entry__do_skip_number = 20528
     _entry__skip_one_fast = 22176
-    _entry__get_index = 50224
-    _entry__get_key = 50160
-    _entry__get_key_impl = 46976
+    _entry__get_index = 50080
+    _entry__get_key = 50016
+    _entry__get_key_impl = 46832
     _entry__html_escape = 8912
     _entry__i64toa = 3472
     _entry__u64toa = 3584
@@ -40,8 +40,8 @@ const (
     _entry__atof_eisel_lemire64 = 10160
     _entry__atof_native = 11712
     _entry__decimal_to_f64 = 10528
-    _entry__right_shift = 56688
-    _entry__left_shift = 56192
+    _entry__right_shift = 56560
+    _entry__left_shift = 56064
     _entry__vsigned = 17200
     _entry__vstring = 14144
     _entry__vunsigned = 17520
@@ -98,14 +98,14 @@ const (
     _size__advance_string_default = 944
     _size__do_skip_number = 924
     _size__skip_one_fast = 3032
-    _size__get_index = 1296
+    _size__get_index = 1312
     _size__get_key = 64
     _size__get_key_impl = 3184
     _size__html_escape = 1248
     _size__i64toa = 48
     _size__u64toa = 1232
     _size__lspace = 144
-    _size__parse_lazy = 13572
+    _size__parse_lazy = 13420
     _size__quote = 1696
     _size__skip_array = 48
     _size__skip_number = 160
@@ -380,14 +380,14 @@ var (
         {10, 32},
         {12, 40},
         {13, 48},
-        {13450, 240},
-        {13451, 232},
-        {13453, 224},
-        {13455, 216},
-        {13457, 208},
-        {13459, 200},
-        {13463, 192},
-        {13572, 240},
+        {13217, 240},
+        {13218, 232},
+        {13220, 224},
+        {13222, 216},
+        {13224, 208},
+        {13226, 200},
+        {13230, 192},
+        {13420, 240},
     }
     _pcsp__quote = [][2]uint32{
         {1, 0},

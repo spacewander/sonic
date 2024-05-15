@@ -79,9 +79,9 @@ func (self *Node) isMut() bool{
 }
 
 var (
-    nullNode  = types.NewNode("null", 0)
-    trueNode  = types.NewNode("true", 0)
-    falseNode = types.NewNode("false", 0)
+    nullNode  = types.NewNode("null", 0, 0)
+    trueNode  = types.NewNode("true", 0, 0)
+    falseNode = types.NewNode("false", 0, 0)
 )
 
 // NewRaw creates a node of raw json.

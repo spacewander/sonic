@@ -220,7 +220,7 @@ func TestNode_GetByPath(t *testing.T) {
 			name: "self",
 			src: ` [ 1 ] `,
 			args: args{path: []interface{}{}},
-			want: `[ 1 ]`,
+			want: ` [ 1 ] `,
 			val:  []interface{}{int64(1)},
 		},
 		{
@@ -380,8 +380,10 @@ func TestNode_GetByPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			println("name:", tt.name)
 			self := NewRaw(tt.src)
 			got := self.GetByPath(tt.args.path...)
+			spew.Dump(got.node)
 			if js, _ := got.Raw(); js != tt.want {
 				t.Errorf("Node.GetByPath() = `%v`, want `%v`", js, tt.want)
 			} else if val, err := got.Interface(decoder.OptionUseInt64); !reflect.DeepEqual(val, tt.val) {
