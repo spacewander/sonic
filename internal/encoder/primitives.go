@@ -34,7 +34,7 @@ func encodeNil(rb *[]byte) error {
     return nil
 }
 
-func encodeString(buf *[]byte, val string) error {
+func EncodeString(buf *[]byte, val string) error {
     var sidx int
     var pbuf *rt.GoSlice
     var pstr *rt.GoString
@@ -108,7 +108,7 @@ func encodeTextMarshaler(buf *[]byte, val encoding.TextMarshaler, opt Options) e
             *buf = append(*buf, ret...)
             return nil
         }
-        return encodeString(buf, rt.Mem2Str(ret) )
+        return EncodeString(buf, rt.Mem2Str(ret) )
     }
 }
 

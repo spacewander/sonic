@@ -72,7 +72,7 @@ var (
 
     __SkipOneFast func(s unsafe.Pointer, p unsafe.Pointer) int
 
-    __GetByPath func(s unsafe.Pointer, p unsafe.Pointer, path unsafe.Pointer, m unsafe.Pointer) int
+    __GetByPath func(s unsafe.Pointer, p unsafe.Pointer, path unsafe.Pointer, m unsafe.Pointer, flags uint64) int
 
     __ValidateOne func(s unsafe.Pointer, p unsafe.Pointer, m unsafe.Pointer, flags uint64) int
 
@@ -120,8 +120,8 @@ func SkipOneFast(s *string, p *int) int {
 }
 
 //go:nosplit
-func GetByPath(s *string, p *int, path *[]interface{}, m *types.StateMachine) int {
-    return __GetByPath(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(path)), rt.NoEscape(unsafe.Pointer(m)))
+func GetByPath(s *string, p *int, path *[]interface{}, m *types.StateMachine, flags uint64) int {
+    return __GetByPath(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(path)), rt.NoEscape(unsafe.Pointer(m)), flags)
 }
 
 //go:nosplit

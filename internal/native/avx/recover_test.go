@@ -557,7 +557,7 @@ func TestRecover_get_by_path(t *testing.T) {
                 t.Fatal("no panic")
             }
         }()
-        _ = get_by_path(nil, &p, &v, m)
+        _ = get_by_path(nil, &p, &v, m, 0)
     })
     t.Run("p", func(t *testing.T) {
         defer func() {
@@ -567,7 +567,7 @@ func TestRecover_get_by_path(t *testing.T) {
                 t.Fatal("no panic")
             }
         }()
-        _ = get_by_path(&sp, nil, &v, m)
+        _ = get_by_path(&sp, nil, &v, m, 0)
     })
     t.Run("path", func(t *testing.T) {
         defer func() {
@@ -577,7 +577,7 @@ func TestRecover_get_by_path(t *testing.T) {
                 t.Fatal("no panic")
             }
         }()
-        _ = get_by_path(&sp, &p, nil, m)
+        _ = get_by_path(&sp, &p, nil, m, 0)
     })
 }
 

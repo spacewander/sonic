@@ -1,23 +1,24 @@
 /*
- * Copyright 2021 ByteDance Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+* Copyright 2021 ByteDance Inc.
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at
+*
+*     http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 
 package types
 
 import (
     `fmt`
+    `strconv`
     `sync`
     `unsafe`
 )
@@ -46,6 +47,7 @@ const (
     _         ValueType = 12    // V_ARRAY_END
     _         ValueType = 13    // V_OBJECT_END
     V_MAX
+    V_NUMBER ValueType = 33
 )
 
 const (
@@ -105,6 +107,9 @@ var _ParsingErrors = []string{
     ERR_FLOAT_INFINITY     : "float number is infinity",
     ERR_MISMATCH           : "mismatched type with value",
     ERR_INVALID_UTF8       : "invalid UTF8",
+
+    ERR_NOT_FOUND          : "not found",
+    ERR_UNSUPPORT_TYPE     : "unsupported type in path",
 }
 
 func (self ParsingError) Error() string {
@@ -162,3 +167,147 @@ func NewDbuf() *byte {
 func FreeDbuf(p *byte) {
     digitPool.Put(p)
 }
+
+type Flag uint16
+
+const (
+    F_ESC	= Flag(1<<0)
+)
+
+type Type uint8 
+
+const (
+    T_NULL    Type = 2
+    T_TRUE    Type = 3
+    T_FALSE   Type = 4
+    T_ARRAY   Type = 5
+    T_OBJECT  Type = 6
+    T_STRING  Type = 7
+    T_NUMBER  Type = 8
+)
+
+type Token struct {
+    Kind Type
+    Flag Flag
+    Off uint32
+    Len uint32
+}
+
+func (t Type) IsComplex() bool {
+    return t == T_ARRAY || t == T_OBJECT
+}
+
+func (t Type) String() string {
+    switch t {
+    case T_NULL:
+        return "null"
+    case T_TRUE:
+        return "true"
+    case T_FALSE:
+        return "false"
+    case T_ARRAY:
+        return "array"
+    case T_OBJECT:
+        return "object"
+    case T_STRING:
+        return "string"
+    case T_NUMBER:
+        return "number"
+    default:
+        return strconv.Itoa(int(t))
+    }
+}
+
+type Node struct {
+    Kind Type
+    Flag Flag
+    JSON string
+    Kids []Token
+}
+
+type stats struct {
+    min int64
+    max int64
+    last int64
+    over int64
+}
+
+const _DefaultTokenSize = 8 
+
+var tokenPool = sync.Pool{
+    New: func() interface{} {
+        return make([]Token, 0, _DefaultTokenSize)
+    },
+}
+
+func NewToken() []Token {
+    return tokenPool.Get().([]Token)
+}
+
+func FreeToken(t []Token) {
+    t = (t)[:0]
+    tokenPool.Put(t)
+}
+
+func (n *Node) Grow()  {
+    n.Kids = make([]Token, 0, 2 * cap(n.Kids))
+}
+
+// encoding 64-bit Token as follows:
+const (
+    /* specific error code */
+    MUST_RETRY = 0x12345
+)
+
+// func (t Flag) IsRaw() bool {
+// 	return t & _F_RAW != 0
+// }
+
+func (t Flag) IsEsc() bool {
+    return t & F_ESC != 0
+}
+
+func (t Token) Peek(json string) byte {
+    return json[t.Off]
+}
+
+func (t Token) Raw(json string) string {
+    return json[t.Off:t.Off + t.Len]
+}
+
+// for T_OBJECT | T_ARRAY, must remember to handle Kids
+func NewNode(json string, start int, flag Flag) Node {
+    kind := typeJumpTable[json[start]]
+    // if kind == T_OBJECT || kind == T_ARRAY {
+    //     flag |= _F_RAW
+    // } 
+    return Node{
+        Kind: kind,
+        Flag: flag,
+        JSON: json,
+    }
+}
+
+var typeJumpTable = [256]Type{
+    '"' : T_STRING,
+    '-' : T_NUMBER,
+    '0' : T_NUMBER,
+    '1' : T_NUMBER,
+    '2' : T_NUMBER,
+    '3' : T_NUMBER,
+    '4' : T_NUMBER,
+    '5' : T_NUMBER,
+    '6' : T_NUMBER,
+    '7' : T_NUMBER,
+    '8' : T_NUMBER,
+    '9' : T_NUMBER,
+    '[' : T_ARRAY,
+    'f' : T_FALSE,
+    'n' : T_NULL,
+    't' : T_TRUE,
+    '{' : T_OBJECT,
+}
+
+const (
+    F_GetByPath_StartAtKey uint64 = 1 << 1
+)
