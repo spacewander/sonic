@@ -8,18 +8,18 @@ import (
 )
 
 const (
-    _entry__parse_lazy = 9712
-    _entry__load_lazy = 224
+    _entry__parse_lazy = 12480
+    _entry__load_lazy = 240
 )
 
 const (
-    _stack__parse_lazy = 432
-    _stack__load_lazy = 216
+    _stack__parse_lazy = 1000
+    _stack__load_lazy = 784
 )
 
 const (
     _size__parse_lazy = 12768
-    _size__load_lazy = 8052
+    _size__load_lazy = 8520
 )
 
 var (
@@ -57,14 +57,15 @@ var (
         {10, 32},
         {12, 40},
         {13, 48},
-        {8034, 216},
-        {8041, 48},
-        {8042, 40},
-        {8044, 32},
-        {8046, 24},
-        {8048, 16},
-        {8050, 8},
-        {8052, 0},
+        {7956, 216},
+        {7963, 48},
+        {7964, 40},
+        {7966, 32},
+        {7968, 24},
+        {7970, 16},
+        {7972, 8},
+        {7973, 0},
+        {8520, 216},
     }
 )
 
