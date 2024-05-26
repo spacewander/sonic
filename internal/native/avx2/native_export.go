@@ -44,4 +44,5 @@ func Use() {
     loader.WrapGoC(_text_vunsigned, _cfunc_vunsigned, []loader.GoC{{"_vunsigned", &S_vunsigned, &F_vunsigned}}, "avx2", "avx2/vunsigned.c")
     loader.WrapGoC(_text_vstring, _cfunc_vstring, []loader.GoC{{"_vstring", &S_vstring, &F_vstring}}, "avx2", "avx2/vstring.c")
     loader.WrapGoC(_text_value, _cfunc_value, []loader.GoC{{"_value", &S_value, &F_value}}, "avx2", "avx2/value.c")
+    loader.WrapGoC(_text_parse_lazy, _cfunc_parse_lazy, []loader.GoC{{"_parse_lazy", &S_parse_lazy, &F_parse_lazy}}, "avx2", "avx2/parse_lazy.c")
 }

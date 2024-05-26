@@ -57,6 +57,7 @@ var (
     S_skip_array  uintptr
     S_skip_object uintptr
     S_skip_number uintptr
+    S_parse_lazy  uintptr
 )
 
 var (
@@ -87,6 +88,8 @@ var (
     __ValidateUTF8 func(s unsafe.Pointer, p unsafe.Pointer, m unsafe.Pointer) (ret int)
 
     __ValidateUTF8Fast func(s unsafe.Pointer) (ret int)
+
+    __ParseLazy func(s unsafe.Pointer, p unsafe.Pointer, node unsafe.Pointer, path unsafe.Pointer) (ret int)
 )
 
 //go:nosplit
@@ -159,6 +162,11 @@ func ValidateUTF8Fast(s *string) (ret int) {
     return __ValidateUTF8Fast(rt.NoEscape(unsafe.Pointer(s)))
 }
 
+//go:nosplit
+func ParseLazy(s *string, p *int, node *types.Node, path *[]interface{}) (ret int) {
+    return __ParseLazy(rt.NoEscape(unsafe.Pointer(s)), rt.NoEscape(unsafe.Pointer(p)), rt.NoEscape(unsafe.Pointer(node)), rt.NoEscape(unsafe.Pointer(path)))
+}
+
 func useSSE() {
     sse.Use()
     S_f64toa      = sse.S_f64toa
@@ -192,6 +200,7 @@ func useSSE() {
     __ValidateOne = sse.F_validate_one
     __ValidateUTF8= sse.F_validate_utf8
     __ValidateUTF8Fast = sse.F_validate_utf8_fast
+    __ParseLazy   = sse.F_parse_lazy
 }
 
 
@@ -228,6 +237,7 @@ func useAVX() {
     __ValidateOne = avx.F_validate_one
     __ValidateUTF8= avx.F_validate_utf8
     __ValidateUTF8Fast = avx.F_validate_utf8_fast
+    __ParseLazy   = avx.F_parse_lazy
 }
 
 func useAVX2() {
@@ -263,17 +273,18 @@ func useAVX2() {
     __ValidateOne = avx2.F_validate_one
     __ValidateUTF8= avx2.F_validate_utf8
     __ValidateUTF8Fast = avx2.F_validate_utf8_fast
+    __ParseLazy   = avx2.F_parse_lazy
 }
 
 
 func init() {
- if cpu.HasAVX2 {
-    useAVX2()
- } else if cpu.HasAVX {
-    useAVX()
- } else if cpu.HasSSE {
-    useSSE()
- } else {
-    panic("Unsupported CPU, maybe it's too old to run Sonic.")
- }
+    if cpu.HasAVX2 {
+        useAVX2()
+    } else if cpu.HasAVX {
+        useAVX()
+    } else if cpu.HasSSE {
+        useSSE()
+    } else {
+        panic("Unsupported CPU, maybe it's too old to run Sonic.")
+    }
 }

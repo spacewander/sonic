@@ -250,7 +250,7 @@ func FreeToken(t []Token) {
 }
 
 func (n *Node) Grow()  {
-    n.Kids = make([]Token, 0, 2 * cap(n.Kids))
+    n.Kids = make([]Token, 0, 2 * (cap(n.Kids)+1))
 }
 
 // encoding 64-bit Token as follows:

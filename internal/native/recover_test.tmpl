@@ -663,3 +663,34 @@ func TestRecover_validate_utf8_fast(t *testing.T) {
     }()
     _ = validate_utf8_fast(nil)
 }
+
+
+func TestRecover_parse_lazy(t *testing.T) {
+    var s = `{"a":[1]}`
+    var p = 0
+    var path = []interface{}{"a", 0}
+    var node types.Node
+	tests := []struct {
+		name string
+		s    *string
+        p    *int
+		path *[]interface{}
+        node *types.Node
+	}{
+	    {"s", nil,  &p, &path, &node},
+	    {"p", &s,  nil, &path, &node},
+	    {"node", &s,  &p, &path, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+            defer func() {
+                if r := recover(); r!= nil {
+                    t.Log("recover: ", r)
+                } else {
+                    t.Fatal("no panic")
+                }
+            }()
+            parse_lazy(tt.s, tt.p, tt.node, tt.path)
+		})
+	}
+}

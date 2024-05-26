@@ -1453,8 +1453,18 @@ static always_inline int get_structural_maskx16(const char *s) {
     return _mm_movemask_epi8(sv);
 }
 
+// asumming start at '}', ']', ','
+static always_inline long backward(const GoString *src, long p) {
+    for (p = p-1; p >= 0; p--) {
+        if (!isspace(src->buf[p])) {
+            break;
+        }
+    }
+    return p+1;
+}
+
 // skip the number at the next '}', ']' or ',' or the ending of json.
-static always_inline long skip_number_fast(const GoString *src, long *p) {
+static always_inline long skip_number_fast(const GoString *src, long *p, bool remain_blank) {
     size_t nb = src->len - *p;
     const char *s = src->buf + *p;
     long vi = *p - 1;
@@ -1464,7 +1474,7 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb >= 32)) {
         if ((m = get_structural_maskx32(s))) {
             *p = s - src->buf + __builtin_ctzll(m);
-            return vi;
+            break;
         }
         s += 32, nb -= 32;
     }
@@ -1473,7 +1483,7 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb >= 16)) {
         if ((m = get_structural_maskx16(s))) {
             *p = s - src->buf + __builtin_ctzll(m);
-            return vi;
+            break;
         }
         s += 16, nb -= 16;
     }
@@ -1481,11 +1491,16 @@ static always_inline long skip_number_fast(const GoString *src, long *p) {
     while (likely(nb > 0)) {
         if (*s == '}' || *s == ']' || *s == ',') {
             *p = s - src->buf;
-            return vi;
+            break;
         }
         s++, nb--;
     }
-    *p = s - src->buf;
+
+    if (!remain_blank) {
+        /* fast-skip may remain trailing blanks, go backward to drop them*/
+        *p = backward(src, *p);
+    }
+    
     return vi;
 }
 
@@ -1603,7 +1618,7 @@ static always_inline long skip_one_fast_1(const GoString *src, long *p) {
         case '[': return skip_array_fast(src, p);
         case '{': return skip_object_fast(src, p);
         case '"': return skip_string_fast(src, p);
-        case '-': case '0' ... '9': return skip_number_fast(src, p);
+        case '-': case '0' ... '9': return skip_number_fast(src, p, false);
         case 't': case 'n': { if (*p + 3 <= src->len) { *p += 3; } else { return -ERR_EOF; } }; break;
         case 'f': { if (*p + 4 <= src->len) { *p += 4; } else { return -ERR_EOF; } }; break;
         case  0 : return -ERR_EOF;
