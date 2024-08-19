@@ -16,6 +16,7 @@
 
 #include "native.h"
 #include "tab.h"
+#include <stdint.h>
 
 static const char Vec16xA0[16] __attribute__((aligned(16))) = {
     '0', '0', '0', '0', '0', '0', '0', '0',
@@ -209,13 +210,31 @@ static inline int u64toa_xlarge_sse2(char *out, uint64_t val) {
     return n + 16;
 }
 
+static inline void check_ascii(uint8_t* sp, size_t nb) {
+    for (size_t i = 0; i < nb; i++) {
+        if (sp[i] < '0' || sp[i] > '9') {
+            __asm__ __volatile__ (
+                "int3"
+            );
+            return;
+        }
+    }
+}
+
 int i64toa(char *out, int64_t val) {
+    uint8_t* start = (uint8_t*)out;
+    size_t sign = 0;
+    size_t nb = 0;
     if (likely(val >= 0)) {
-        return u64toa(out, (uint64_t)val);
+        nb = u64toa(out, (uint64_t)val);
     } else {
         *out = '-';
-        return u64toa(out + 1, (uint64_t)(-val)) + 1;
+        sign = 1;
+        nb = u64toa(out + 1, (uint64_t)(-val)) + 1;
     }
+
+    check_ascii(start + sign, nb - sign);
+    return nb;
 }
 
 int u64toa(char *out, uint64_t val) {
